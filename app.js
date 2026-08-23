@@ -692,9 +692,11 @@ function boot(){
 // Decide how to load data: local serve.js server, static host (Pages), or local file.
 async function initData(){
   if(serverMode()){
-    // http(s): could be the local serve.js helper OR a static host like GitHub Pages. Probe for the API.
+    // http(s): could be the local serve.js helper OR a static host like GitHub Pages.
+    // Only the local helper lives on localhost, so probe there (avoids a stray 404 on Pages).
+    const isLocal = /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname);
     let hasApi = false;
-    try{ hasApi = (await fetch('/api/status')).ok; }catch{ hasApi = false; }
+    if(isLocal){ try{ hasApi = (await fetch('/api/status')).ok; }catch{ hasApi = false; } }
     if(hasApi){
       // local launcher — offer Refresh + auto-refresh, auto-download on first run
       $('refreshBtn').classList.remove('hidden');
