@@ -589,6 +589,29 @@ async function loadFromServer(forceRefresh){
   }
 }
 
+// Static host (e.g. GitHub Pages): no local API. Just load the committed/deployed json/ data.
+async function loadStaticData(){
+  try{
+    const gr = await fetch('json/gems.json', {cache:'no-store'});
+    if(!gr.ok) throw new Error('no price data deployed yet');
+    const gj = await gr.json();
+    let cj = null;
+    try{ const cr = await fetch('json/currency.json', {cache:'no-store'}); if(cr.ok) cj = await cr.json(); }catch{}
+    let meta = {league:$('league').value, game:$('game').value};
+    try{
+      const mr = await fetch('json/meta.json', {cache:'no-store'});
+      if(mr.ok){ const m = await mr.json(); if(m.league){ meta.league=m.league; $('league').value=m.league; } if(m.game){ meta.game=m.game; $('game').value=m.game; } }
+    }catch{}
+    ingest(gj, cj, meta);
+    $('loader').classList.add('hidden');
+  }catch(e){
+    const cached = load(LS.data, null);
+    if(cached?.g){ try{ ingest(cached.g, cached.c, cached.meta||{}); }catch{} }
+    setStatus('No price data available yet ('+e.message+'). Try again shortly, or use manual load below.','err');
+    $('loader').classList.remove('hidden');
+  }
+}
+
 function readFileText(input){
   return new Promise((res,rej)=>{
     const f=input.files&&input.files[0]; if(!f) return res(null);
@@ -663,13 +686,26 @@ function boot(){
   SORT.key = $('sort').value || 'vaalEV';
   updateDblWarn();
 
+  initData();
+}
+
+// Decide how to load data: local serve.js server, static host (Pages), or local file.
+async function initData(){
   if(serverMode()){
-    // running via serve.js / start.bat — auto-download + auto-load, offer Refresh + auto-refresh
-    $('refreshBtn').classList.remove('hidden');
-    $('autoWrap').classList.remove('hidden');
-    $('refreshBtn').onclick = () => loadFromServer(true);
-    setupAutoRefresh();
-    loadFromServer(false);
+    // http(s): could be the local serve.js helper OR a static host like GitHub Pages. Probe for the API.
+    let hasApi = false;
+    try{ hasApi = (await fetch('/api/status')).ok; }catch{ hasApi = false; }
+    if(hasApi){
+      // local launcher — offer Refresh + auto-refresh, auto-download on first run
+      $('refreshBtn').classList.remove('hidden');
+      $('autoWrap').classList.remove('hidden');
+      $('refreshBtn').onclick = () => loadFromServer(true);
+      setupAutoRefresh();
+      loadFromServer(false);
+    } else {
+      // static host: load the deployed json/ data (refreshed server-side by CI); no Refresh button
+      loadStaticData();
+    }
   } else {
     // opened as a local file — restore cache or show the manual loader
     const cached=load(LS.data,null);

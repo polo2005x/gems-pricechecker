@@ -5,6 +5,13 @@ and ranks gems by **profit to level** and **profit from corrupting** them.
 
 No install, no build step — it's just `index.html` + `styles.css` + `app.js`.
 
+## 🌐 Live version
+
+**<https://polo2005x.github.io/gems-pricechecker/>** — open it in any browser, nothing to install.
+Prices are auto-refreshed server-side (a GitHub Action re-fetches poe.ninja every ~2 hours),
+so it just works and stays reasonably current. For on-demand fresh prices, run it locally
+with `start.bat` (below).
+
 ## How to run it (recommended — fully automatic)
 
 **Double-click `start.bat`.**
