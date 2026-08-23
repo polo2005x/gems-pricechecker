@@ -532,12 +532,39 @@ function ingest(gemsJson, currJson, meta){
   }catch(e){ /* too big for quota — fine */ }
   saveSettings();
   renderTable();
-  setStatus(`Loaded ${GEMS.length} leveling-viable gems for ${meta.league}` +
-            (meta.when?` · cached ${new Date(meta.when).toLocaleString()}`:'') , 'ok');
+  META_INFO = meta || null;
+  updateFreshness();
+  setStatus(`Loaded ${GEMS.length} leveling-viable gems for ${meta.league}`, 'ok');
 }
 const round2=(v)=>Math.round(v*100)/100;
 
 function setStatus(msg, cls){ const s=$('status'); s.innerHTML=msg; s.className='status'+(cls?' '+cls:''); }
+
+// ---------- data freshness / next-update countdown ----------
+let META_INFO = null;         // last-loaded {league, game, when}
+let IS_STATIC_HOST = false;   // true on GitHub Pages (data on a fixed schedule)
+const UPDATE_MINUTES = [10, 40];  // MUST match cron in .github/workflows/deploy-pages.yml
+function fmtDur(ms){
+  const m = Math.max(0, Math.round(ms/60000));
+  return m<60 ? m+'m' : Math.floor(m/60)+'h '+(m%60)+'m';
+}
+function nextScheduledUpdate(from){   // next UTC time whose minute is in UPDATE_MINUTES
+  for(let i=1;i<=120;i++){
+    const t=new Date(from + i*60000);
+    if(UPDATE_MINUTES.includes(t.getUTCMinutes())){ t.setUTCSeconds(0,0); return t; }
+  }
+  return null;
+}
+function updateFreshness(){
+  const el=$('freshness'); if(!el) return;
+  if(!META_INFO || !META_INFO.when){ el.textContent=''; return; }
+  let txt = 'prices ' + fmtDur(Date.now()-META_INFO.when) + ' old';
+  if(IS_STATIC_HOST){
+    const nxt = nextScheduledUpdate(Date.now());
+    if(nxt) txt += ' · next ~' + nxt.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) + ' (in ' + fmtDur(nxt-Date.now()) + ')';
+  }
+  el.textContent = txt;
+}
 
 // ---------- URLs ----------
 function apiBase(){ return `https://poe.ninja/${$('game').value}/api/economy/stash/current`; }
@@ -578,7 +605,9 @@ async function loadFromServer(forceRefresh){
     const gj = await gr.json();
     let cj = null;
     try{ const cr = await fetch('json/currency.json', {cache:'no-store'}); if(cr.ok) cj = await cr.json(); }catch{}
-    ingest(gj, cj, {league:$('league').value, game:$('game').value});
+    let meta = {league:$('league').value, game:$('game').value};
+    try{ const mr = await fetch('json/meta.json', {cache:'no-store'}); if(mr.ok){ const m = await mr.json(); if(m.when) meta.when=m.when; } }catch{}
+    ingest(gj, cj, meta);
     $('loader').classList.add('hidden');
   }catch(e){
     // fall back to any cached data, else the manual loader
@@ -600,7 +629,7 @@ async function loadStaticData(){
     let meta = {league:$('league').value, game:$('game').value};
     try{
       const mr = await fetch('json/meta.json', {cache:'no-store'});
-      if(mr.ok){ const m = await mr.json(); if(m.league){ meta.league=m.league; $('league').value=m.league; } if(m.game){ meta.game=m.game; $('game').value=m.game; } }
+      if(mr.ok){ const m = await mr.json(); if(m.league){ meta.league=m.league; $('league').value=m.league; } if(m.game){ meta.game=m.game; $('game').value=m.game; } if(m.when){ meta.when=m.when; } }
     }catch{}
     ingest(gj, cj, meta);
     $('loader').classList.add('hidden');
@@ -673,6 +702,13 @@ function boot(){
   ASSUME_IDS.forEach(id=> $(id).addEventListener('input', ()=>{ saveSettings(); updateDblWarn(); if(GEMS.length) renderTable(); }));
   ['unit','minList','showAll','search','metaQuality','metaQualityCost'].forEach(id=>
     $(id).addEventListener('input', ()=>{ saveSettings(); if(GEMS.length) renderTable(); }));
+  // search clear (×)
+  const syncClear = ()=> $('searchClear').classList.toggle('hidden', !$('search').value);
+  $('search').addEventListener('input', syncClear);
+  $('searchClear').onclick = ()=>{ $('search').value=''; $('search').dispatchEvent(new Event('input')); $('search').focus(); };
+  syncClear();
+  // live "prices X old · next update" ticker
+  setInterval(updateFreshness, 30000);
   // sort dropdown drives the unified SORT state
   $('sort').addEventListener('change', ()=>{
     SORT.key=$('sort').value; SORT.dir = SORT.key==='name'?1:-1;
@@ -699,13 +735,15 @@ async function initData(){
     if(isLocal){ try{ hasApi = (await fetch('/api/status')).ok; }catch{ hasApi = false; } }
     if(hasApi){
       // local launcher — offer Refresh + auto-refresh, auto-download on first run
+      IS_STATIC_HOST = false;
       $('refreshBtn').classList.remove('hidden');
       $('autoWrap').classList.remove('hidden');
       $('refreshBtn').onclick = () => loadFromServer(true);
       setupAutoRefresh();
       loadFromServer(false);
     } else {
-      // static host: load the deployed json/ data (refreshed server-side by CI); no Refresh button
+      // static host (e.g. GitHub Pages): data refreshed server-side on a fixed schedule
+      IS_STATIC_HOST = true;
       loadStaticData();
     }
   } else {

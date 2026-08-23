@@ -45,6 +45,7 @@ async function refresh(game, league){
   fs.mkdirSync(path.join(ROOT, 'json'), { recursive:true });
   fs.writeFileSync(path.join(ROOT, 'json', 'gems.json'), gText);
   if(cText) fs.writeFileSync(path.join(ROOT, 'json', 'currency.json'), cText);
+  fs.writeFileSync(path.join(ROOT, 'json', 'meta.json'), JSON.stringify({ league, game, when: Date.now() }));
   console.log(`  ↻ downloaded ${league} (${game}) — ${(gText.length/1e6).toFixed(1)} MB gems` +
               (cText ? ' + currency' : '') + ` @ ${new Date().toLocaleTimeString()}`);
   return { ok:true, when:Date.now(), gemsBytes:gText.length, hasCurrency:!!cText, league, game };

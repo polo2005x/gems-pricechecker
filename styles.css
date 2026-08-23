@@ -56,7 +56,14 @@ input.bad-input{border-color:var(--bad); background:rgba(229,97,91,.12)}
 
 .controls{display:flex; flex-wrap:wrap; gap:12px; align-items:center; padding:10px 16px}
 .controls .chk{gap:5px}
-#search{min-width:200px}
+.search-wrap{position:relative; display:inline-flex; align-items:center}
+#search{min-width:200px; padding-right:26px}
+#search::-webkit-search-cancel-button{-webkit-appearance:none; appearance:none}
+.search-clear{position:absolute; right:4px; border:none; background:none; color:var(--muted);
+  font-size:16px; line-height:1; padding:2px 5px; cursor:pointer; border-radius:4px}
+.search-clear:hover{color:var(--text); background:var(--panel2)}
+#freshness{font-size:12px}
+#freshness:not(:empty)::after{content:"·"; margin:0 8px; color:var(--line)}
 .meta-ctrl{display:inline-flex; gap:12px; align-items:center; padding-left:12px; border-left:1px solid var(--line)}
 .meta-ctrl label{font-size:13px}
 

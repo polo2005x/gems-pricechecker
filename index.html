@@ -121,7 +121,10 @@
 
 <!-- ============ CONTROLS ============ -->
 <section class="controls">
-  <input id="search" type="search" placeholder="Search gem name…" />
+  <span class="search-wrap">
+    <input id="search" type="search" placeholder="Search gem name…" />
+    <button id="searchClear" type="button" class="search-clear hidden" aria-label="Clear search" title="Clear">&times;</button>
+  </span>
   <label>Sort
     <select id="sort">
       <option value="vaalEV">Vaal EV / attempt</option>
@@ -156,6 +159,7 @@
     </label>
   </span>
   <span class="spacer"></span>
+  <span id="freshness" class="muted"></span>
   <span id="rowCount" class="muted"></span>
 </section>
 
