@@ -18,41 +18,41 @@ async function getJson(url){
   return r.json();
 }
 
+const slim = (lines, keys) => ({ lines: lines.map(l => Object.fromEntries(keys.map(k => [k, l[k]]))) });
+
 (async () => {
-  // index-state gives the current league + the full league list (for the dropdown)
+  // index-state gives every economy league (softcore, hardcore, standard, …)
   const idx = await getJson(`https://poe.ninja/${game}/api/data/index-state`);
   const eco = idx.economyLeagues || [];
-  const leagueNames = eco.map(l => l.name).filter(Boolean);
-  // current softcore challenge league = first that isn't Standard / any Hardcore
-  const league = process.env.LEAGUE || (eco.find(l => !/standard|hardcore/i.test(l.name)) || eco[0] || {}).name;
-  if(!league) throw new Error('could not determine current league');
+  const defaultLeague = process.env.LEAGUE || (eco.find(l => !/standard|hardcore/i.test(l.name)) || eco[0] || {}).name;
+  const defaultSlug   = (eco.find(l => l.name === defaultLeague) || {}).url || (eco[0] || {}).url;
+  if(!defaultLeague) throw new Error('could not determine leagues');
   const base = `https://poe.ninja/${game}/api/economy/stash/current`;
-
-  const gems = await getJson(`${base}/item/overview?league=${encodeURIComponent(league)}&type=SkillGem`);
-  if(!gems.lines || !gems.lines.length) throw new Error(`no gems returned for league "${league}"`);
-
-  let currency = null;
-  try { currency = await getJson(`${base}/currency/overview?league=${encodeURIComponent(league)}&type=Currency`); }
-  catch(e){ console.warn('currency fetch failed (optional):', e.message); }
-
   fs.mkdirSync(outDir, { recursive: true });
 
-  // slim to only the fields the app reads — keeps the deployed artifact small
-  const slimGems = { lines: gems.lines.map(l => ({
-    name:l.name, icon:l.icon, variant:l.variant, chaosValue:l.chaosValue, listingCount:l.listingCount,
-  })) };
-  fs.writeFileSync(path.join(outDir, 'gems.json'), JSON.stringify(slimGems));
-
-  if(currency && currency.lines){
-    const slimCurr = { lines: currency.lines.map(l => ({
-      currencyTypeName:l.currencyTypeName, chaosEquivalent:l.chaosEquivalent,
-    })) };
-    fs.writeFileSync(path.join(outDir, 'currency.json'), JSON.stringify(slimCurr));
+  // fetch each league so the dropdown can switch between them client-side on the static site
+  const withData = [];
+  for(const l of eco){
+    try {
+      const gems = await getJson(`${base}/item/overview?league=${encodeURIComponent(l.name)}&type=SkillGem`);
+      if(!gems.lines || !gems.lines.length){ console.warn(`  ${l.name}: no gems, skipped`); continue; }
+      fs.writeFileSync(path.join(outDir, `gems-${l.url}.json`),
+        JSON.stringify(slim(gems.lines, ['name','icon','variant','chaosValue','listingCount'])));
+      try {
+        const cur = await getJson(`${base}/currency/overview?league=${encodeURIComponent(l.name)}&type=Currency`);
+        if(cur.lines) fs.writeFileSync(path.join(outDir, `currency-${l.url}.json`),
+          JSON.stringify(slim(cur.lines, ['currencyTypeName','chaosEquivalent'])));
+      } catch { /* currency optional */ }
+      withData.push({ name:l.name, slug:l.url });
+      console.log(`  ${l.name}: ${gems.lines.length} gems`);
+    } catch(e){ console.warn(`  ${l.name}: failed — ${e.message}`); }
   }
-  fs.writeFileSync(path.join(outDir, 'meta.json'), JSON.stringify({ league, game, when: Date.now() }));
-  if(leagueNames.length) fs.writeFileSync(path.join(outDir, 'leagues.json'), JSON.stringify(leagueNames));
+  if(!withData.length) throw new Error('no league data fetched');
 
-  // gem display-name -> trade type/discriminator, for building pathofexile.com/trade links
+  fs.writeFileSync(path.join(outDir, 'leagues.json'), JSON.stringify(withData));
+  fs.writeFileSync(path.join(outDir, 'meta.json'), JSON.stringify({ defaultLeague, defaultSlug, game, when: Date.now() }));
+
+  // gem display-name -> trade type/discriminator (league-independent), for pathofexile.com/trade links
   try {
     const items = await getJson('https://www.pathofexile.com/api/trade/data/items');
     const gemEntries = [].concat(...(items.result || []).filter(c => /gem/i.test(c.id)).map(c => c.entries || []));
@@ -62,5 +62,5 @@ async function getJson(url){
     console.log(`wrote trademap (${Object.keys(map).length} gem types)`);
   } catch(e){ console.warn('trademap fetch failed (optional):', e.message); }
 
-  console.log(`wrote ${slimGems.lines.length} gems for ${league} (${game}) to ${outDir}`);
+  console.log(`done — ${withData.length} leagues, default ${defaultLeague}`);
 })().catch(e => { console.error('FAIL', e.message); process.exit(1); });

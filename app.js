@@ -14,6 +14,7 @@ let CURR = {};            // { gcp, vaal, div }  (chaos values, from currency da
 let OVER = load(LS.overrides, {});   // { "<detailsId>::<field>": number }
 let CAT = 'top';
 const GAME = 'poe1';                  // this tool is PoE1-only
+let LEAGUE_SLUG = {};                 // league name -> poe.ninja slug (for per-league data files)
 
 // ---------- tiny helpers ----------
 const $ = (id) => document.getElementById(id);
@@ -685,12 +686,12 @@ function ensureLeagueOption(name){
 }
 async function populateLeagues(){
   const sel=$('league'); if(!sel) return;
-  let leagues=['Standard','Hardcore'];
-  try{ const r=await fetch('json/leagues.json',{cache:'no-store'}); if(r.ok){ const j=await r.json(); if(Array.isArray(j)&&j.length) leagues=j; } }catch{}
-  sel.innerHTML='';
-  for(const name of leagues){ const o=document.createElement('option'); o.value=name; o.textContent=name; sel.appendChild(o); }
+  let leagues=[{name:'Standard',slug:'standard'},{name:'Hardcore',slug:'hardcore'}];
+  try{ const r=await fetch('json/leagues.json',{cache:'no-store'}); if(r.ok){ const j=await r.json(); if(Array.isArray(j)&&j.length) leagues=j.map(x=> typeof x==='string'?{name:x,slug:null}:x); } }catch{}
+  LEAGUE_SLUG={}; sel.innerHTML='';
+  for(const {name,slug} of leagues){ LEAGUE_SLUG[name]=slug; const o=document.createElement('option'); o.value=name; o.textContent=name; sel.appendChild(o); }
   const saved=(load(LS.settings,{})||{}).league;
-  if(saved){ ensureLeagueOption(saved); sel.value=saved; }
+  if(saved && (saved in LEAGUE_SLUG)) sel.value=saved;
   refreshLinks();
 }
 
@@ -741,19 +742,19 @@ async function loadFromServer(forceRefresh){
 }
 
 // Static host (e.g. GitHub Pages): no local API. Just load the committed/deployed json/ data.
-async function loadStaticData(){
+async function loadStaticData(leagueName){
   try{
-    const gr = await fetch('json/gems.json', {cache:'no-store'});
-    if(!gr.ok) throw new Error('no price data deployed yet');
+    let meta={}; try{ meta=await (await fetch('json/meta.json',{cache:'no-store'})).json(); }catch{}
+    const name = leagueName || $('league').value || meta.defaultLeague;
+    const slug = LEAGUE_SLUG[name] || (name===meta.defaultLeague ? meta.defaultSlug : null) || meta.defaultSlug;
+    if(name){ ensureLeagueOption(name); $('league').value=name; }
+    setStatus(`Loading ${name}…`);
+    const gr = await fetch(`json/gems-${slug}.json`, {cache:'no-store'});
+    if(!gr.ok) throw new Error('no data for '+name);
     const gj = await gr.json();
     let cj = null;
-    try{ const cr = await fetch('json/currency.json', {cache:'no-store'}); if(cr.ok) cj = await cr.json(); }catch{}
-    let meta = {league:$('league').value, game:GAME};
-    try{
-      const mr = await fetch('json/meta.json', {cache:'no-store'});
-      if(mr.ok){ const m = await mr.json(); if(m.league){ meta.league=m.league; ensureLeagueOption(m.league); $('league').value=m.league; } if(m.when){ meta.when=m.when; } }
-    }catch{}
-    ingest(gj, cj, meta);
+    try{ const cr = await fetch(`json/currency-${slug}.json`, {cache:'no-store'}); if(cr.ok) cj = await cr.json(); }catch{}
+    ingest(gj, cj, {league:name, game:meta.game||GAME, when:meta.when});
     $('loader').classList.add('hidden');
   }catch(e){
     const cached = load(LS.data, null);
@@ -803,7 +804,6 @@ function setupAutoRefresh(){
 function boot(){
   restoreSettings();
   buildColToggles();
-  populateLeagues();
   refreshLinks();
 
   // events
@@ -833,7 +833,11 @@ function boot(){
     document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
     t.classList.add('active'); CAT=t.dataset.cat; renderTable();
   });
-  $('league').addEventListener('input', ()=>{ refreshLinks(); updateTempleLinks(); saveSettings(); });
+  $('league').addEventListener('change', ()=>{
+    refreshLinks(); updateTempleLinks(); saveSettings();
+    if(IS_STATIC_HOST) loadStaticData($('league').value);   // static: swap to that league's deployed data
+    else if(HAS_API) loadFromServer(true);                  // local server: re-fetch the selected league
+  });
   ASSUME_IDS.forEach(id=> $(id).addEventListener('input', ()=>{ saveSettings(); updateDblWarn(); if(GEMS.length) renderTable(); }));
   ['unit','minList','search','metaQuality','metaQualityCost'].forEach(id=>
     $(id).addEventListener('input', ()=>{ saveSettings(); if(GEMS.length) renderTable(); }));
@@ -866,15 +870,17 @@ function boot(){
 }
 
 // Decide how to load data: local serve.js server, static host (Pages), or local file.
+let HAS_API = false;
 async function initData(){
   try{ const r=await fetch('json/trademap.json',{cache:'no-store'}); if(r.ok) TRADEMAP=await r.json(); }catch{}
+  if(serverMode()) await populateLeagues();   // build the league dropdown + slug map before loading data
   if(serverMode()){
     // http(s): could be the local serve.js helper OR a static host like GitHub Pages.
     // Only the local helper lives on localhost, so probe there (avoids a stray 404 on Pages).
     const isLocal = /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname);
-    let hasApi = false;
-    if(isLocal){ try{ hasApi = (await fetch('/api/status')).ok; }catch{ hasApi = false; } }
-    if(hasApi){
+    HAS_API = false;
+    if(isLocal){ try{ HAS_API = (await fetch('/api/status')).ok; }catch{ HAS_API = false; } }
+    if(HAS_API){
       // local launcher — offer Refresh + auto-refresh, auto-download on first run
       IS_STATIC_HOST = false;
       $('refreshBtn').classList.remove('hidden');

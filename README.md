@@ -8,9 +8,10 @@ No install, no build step — it's just `index.html` + `styles.css` + `app.js`.
 ## 🌐 Live version
 
 **<https://polo2005x.github.io/gems-pricechecker/>** — open it in any browser, nothing to install.
-Prices are auto-refreshed server-side (a GitHub Action re-fetches poe.ninja every hour),
-so it just works and stays reasonably current. For on-demand fresh prices, run it locally
-with `start.bat` (below).
+Prices are auto-refreshed server-side (a GitHub Action re-fetches poe.ninja every ~30 min),
+so it just works and stays reasonably current. The **League** dropdown switches between all
+economy leagues (softcore, hardcore, Standard, …) — each is fetched and deployed, so switching
+loads that league's prices instantly. For on-demand fresh prices, run it locally with `start.bat`.
 
 ## How to run it (recommended — fully automatic)
 

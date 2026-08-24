@@ -46,11 +46,7 @@ async function refresh(game, league){
   fs.writeFileSync(path.join(ROOT, 'json', 'gems.json'), gText);
   if(cText) fs.writeFileSync(path.join(ROOT, 'json', 'currency.json'), cText);
   fs.writeFileSync(path.join(ROOT, 'json', 'meta.json'), JSON.stringify({ league, game, when: Date.now() }));
-  try {
-    const idx = await (await fetch(`https://poe.ninja/${game}/api/data/index-state`)).json();
-    const names = (idx.economyLeagues || []).map(l => l.name).filter(Boolean);
-    if(names.length) fs.writeFileSync(path.join(ROOT, 'json', 'leagues.json'), JSON.stringify(names));
-  } catch { /* league list optional */ }
+  await writeLeagues(game);
   try {
     const items = await (await fetch('https://www.pathofexile.com/api/trade/data/items', { headers:{'user-agent':'gems-pricechecker-bot'} })).json();
     const ge = [].concat(...(items.result || []).filter(c => /gem/i.test(c.id)).map(c => c.entries || []));
@@ -61,6 +57,18 @@ async function refresh(game, league){
   console.log(`  ↻ downloaded ${league} (${game}) — ${(gText.length/1e6).toFixed(1)} MB gems` +
               (cText ? ' + currency' : '') + ` @ ${new Date().toLocaleTimeString()}`);
   return { ok:true, when:Date.now(), gemsBytes:gText.length, hasCurrency:!!cText, league, game };
+}
+
+// write leagues.json (name+slug) so the dropdown is populated & ordered (challenge league first)
+async function writeLeagues(game){
+  try {
+    const idx = await (await fetch(`https://poe.ninja/${game}/api/data/index-state`)).json();
+    const leagues = (idx.economyLeagues || []).filter(l => l.name).map(l => ({ name:l.name, slug:l.url }));
+    if(leagues.length){
+      fs.mkdirSync(path.join(ROOT, 'json'), { recursive:true });
+      fs.writeFileSync(path.join(ROOT, 'json', 'leagues.json'), JSON.stringify(leagues));
+    }
+  } catch { /* league list optional */ }
 }
 
 function sendJson(res, code, obj){
@@ -109,5 +117,6 @@ server.listen(PORT, () => {
   console.log('\n  PoE1 Gem Profit Checker');
   console.log('  Running at ' + link);
   console.log('  Keep this window open. Close it to stop.\n');
+  writeLeagues('poe1');   // populate the league dropdown before the first page load
   if(!process.env.NO_OPEN) exec(`start "" "${link}"`, () => {});   // open default browser (Windows)
 });
