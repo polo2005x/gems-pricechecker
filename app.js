@@ -67,24 +67,14 @@ function parseVariant(v){
 }
 // ---------- gem categories ----------
 // meta  = Empower / Enlighten / Enhance (incl. Awakened) + Eclipse — leveled for the level bonus, quality irrelevant
-// exceptional = the boss-drop "exceptional" support gems (poewiki), minus Eclipse
+// exceptional = drop-only "exceptional" support gems (poewiki.net/wiki/Exceptional) — they cap at level 3
 // normal = everything else
 const META_RE = /(Empower|Enlighten|Enhance) Support$/;   // matches Awakened variants too
-const EXCEPTIONAL = new Set([
-  'Cooldown Recovery Support','Frostmage Support','Greater Spell Cascade Support','Voidstorm Support',
-  'Foulgrasp Support','Greater Multistrike Support','Hiveborn Support','Hextoad Support','Eclipse Support',
-  'Bloodsoaked Banner Support','Invert the Rules Support','Cast on Ward Break Support','Vaal Sacrifice Support',
-  'Greater Spell Echo Support','Vaal Temptation Support','Machinations Support','Pyre Support','Bonespire Support',
-  'Scornful Herald Support','Cull the Weak Support','Greater Ancestral Call Support','Fissure Support',
-  'Hexpass Support','Greater Fork Support','Greater Chain Support','Lethal Dose Support','Companionship Support',
-  'Divine Sentinel Support','Annihilation Support','Invention Support','Greater Kinetic Instability Support',
-  'Void Shockwave Support','Eldritch Blasphemy Support','Gluttony Support','Overheat Support','Congregation Support',
-  'Greater Devour Support','Greater Unleash Support','Pacifism Support','Minion Pact Support','Unholy Trinity Support',
-  'Overloaded Intensity Support','Transfusion Support',
-]);
-function categoryOf(name){
+// Detected from data (a Support gem that caps at level 3) so it self-maintains as GGG adds gems,
+// rather than a hardcoded list that goes stale (missed Communion / Coursing Current / Crystalfall).
+function categoryOf(name, maxLvl){
   if(name === 'Eclipse Support' || META_RE.test(name)) return 'meta';
-  if(EXCEPTIONAL.has(name)) return 'exceptional';
+  if(/ Support$/.test(name) && maxLvl!=null && maxLvl<=3) return 'exceptional';
   return 'normal';
 }
 
@@ -124,7 +114,7 @@ function buildGems(lines){
     // pick the highest uncorrupted quality available at maxLvl (usually 20; awakened exc. may be 0/20)
     const qsAtMax = unc.filter(r=>r.pv.lvl===maxLvl).map(r=>r.pv.q);
     const topQ = Math.max(0,...qsAtMax);         // 20 for normal gems, 0 for exceptional
-    const cat=categoryOf(g.name);
+    const cat=categoryOf(g.name, maxLvl);
     out.push({
       id:l_id(g.name), name:g.name, icon:g.icon,
       baseLvl, maxLvl, topQ, maxList:g.maxList,
@@ -672,11 +662,11 @@ function tradeIcon(g, field){
   return `<a class="trd" href="${tradeUrl(g,p[0],p[1],p[2])}" target="_blank" rel="noopener" `+
          `title="Find this on pathofexile.com/trade" onclick="event.stopPropagation()">&#8599;</a>`;
 }
-// double-corrupt temple: Chronicle of Atzoatl with an open Locus of Corruption (Tier 3) room
+// double-corrupt temple: Chronicle of Atzoatl with an open Doryani's Institute (Tier 3) room (double-corrupts gems)
 function templeTradeUrl(){
   const league = (META_INFO && META_INFO.league) || $('league').value || 'Standard';
   const q = { query:{ status:{option:'securable'}, type:'Chronicle of Atzoatl',
-    stats:[{type:'and', filters:[{id:'pseudo.pseudo_temple_corruption_room_3', value:{option:1}}]}] },
+    stats:[{type:'and', filters:[{id:'pseudo.pseudo_temple_gem_room_3', value:{option:1}}]}] },
     sort:{price:'asc'} };
   return `https://www.pathofexile.com/trade/search/${encodeURIComponent(league)}?q=${encodeURIComponent(JSON.stringify(q))}`;
 }
