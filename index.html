@@ -170,6 +170,13 @@
       <option value="name">Name (A–Z)</option>
     </select>
   </label>
+  <label title="Filter out gems whose prices are backed by too few poe.ninja listings.">Confidence
+    <select id="confFilter">
+      <option value="any" selected>Any</option>
+      <option value="med">Medium+</option>
+      <option value="high">High only</option>
+    </select>
+  </label>
   <span id="metaControls" class="meta-ctrl hidden">
     <label title="Quality on Empower-tier gems gives 5% increased experience per 1% quality — it speeds up leveling.&#10;&#10;10% — matching socket colour (no GCP)&#10;20% — normal quality 20 gem (GCP)&#10;30% — + matching socket colour&#10;38% — + +8 quality socketed&#10;50% — Atziri's Disfavour + normal quality&#10;60% — + matching colour">
       Leveling quality
@@ -209,7 +216,7 @@
   Cost model: buy a <b>level&nbsp;1 / 0q</b> gem, level it yourself (free), use GCPs for quality.
   Corruption targets a <b>+1 level</b> gem (21 for standard gems). EV/attempt already accounts for the resale of failed corruptions.
   Double-click any price cell to set a <b>manual override</b>; clear it to go back to the API price. All settings &amp; overrides are saved in your browser.
-  A <span style="color:var(--bad)">&#9679;</span>/<span style="color:var(--accent)">&#9679;</span> next to a price flags <b>low / medium confidence</b> (few poe.ninja listings — hover for the count); reliable prices show no dot.
+  The <b>Conf</b> column rates price reliability — <span style="color:var(--good)">&#9679;</span> high / <span style="color:var(--accent)">&#9679;</span> medium / <span style="color:var(--bad)">&#9679;</span> low, from how many poe.ninja listings back the price (hover for the breakdown); the <b>Confidence</b> filter hides thin gems. The <b>&#8599;</b> columns open pathofexile.com/trade for that exact price.
 </footer>
 
 <script src="app.js"></script>

@@ -41,7 +41,7 @@ function readAssume(){
 }
 function saveSettings(){
   const s={}; ASSUME_IDS.forEach(id => s[id]=$(id).value);
-  ['league','unit','sort','minList','search','autoRefresh','autoMin','metaQuality','metaQualityCost'].forEach(id=>{
+  ['league','unit','sort','minList','search','confFilter','autoRefresh','autoMin','metaQuality','metaQualityCost'].forEach(id=>{
     const el=$(id); if(!el) return; s[id] = el.type==='checkbox'?el.checked:el.value;
   });
   save(LS.settings, s);
@@ -202,6 +202,10 @@ function computeMetrics(g, a, mode){
   m.leveledList = RL[leveledField];
   m.prizeList = RL[prizeField];
   m.p23List = RL.P23;
+  // gem confidence = weakest of the key priced variants (buy / leveled / prize)
+  const cc = [m.buyList, m.leveledList, m.prizeList].filter(v=>v!=null);
+  m.confCount = cc.length ? Math.min(...cc) : null;
+  m.confTier  = m.confCount==null ? 'none' : m.confCount>10 ? 'high' : m.confCount>3 ? 'med' : 'low';
 
   const failVal=(proxy, basis)=>{
     if(a.failModel==='zero') return 0;
@@ -273,6 +277,7 @@ const CAT_LABEL = { normal:'normal', exceptional:'exceptional', meta:'Empower/En
 
 // user-toggleable columns (order matches display); hidden-by-default set per the user
 const COL_TOGGLES = [
+  {id:'conf',       label:'Confidence'},
   {id:'buy',        label:'Buy-in'},
   {id:'leveled',    label:'Leveled'},
   {id:'levelProfit',label:'Level profit'},
@@ -309,10 +314,14 @@ function buildCols(mode, showAdj, plus){
   const p23lbl = `${plus}/23`;
   const cols = [
     {name:true, grp:'', label:'Gem'},
+    {id:'conf', conf:true, grp:'', label:'Conf', sk:'conf',
+      info:'Confidence in this gem’s prices, from how many poe.ninja listings back them. Green = high (&gt;10), amber = medium (4–10), red = low (≤3). Uses the weakest of Buy-in / Leveled / Prize; hover for the breakdown.'},
     {id:'buy', grp:'Level it yourself', label:'Buy-in', price:'buy', ovr:'buyField', sk:'buy',
       info:'What you pay up front — the level-1 gem (0% quality where it exists).'},
+    {id:'buy', tradeFor:'buy', grp:'Level it yourself', label:''},
     {id:'leveled', grp:'Level it yourself', label:'Leveled', price:'leveled', ovr:'leveledField', sk:'leveled',
       info:'poe.ninja price once leveled to max level. Uses 0% quality when the gem trades there, otherwise the 20% price (many low-level supports only sell at 20q).'},
+    {id:'leveled', tradeFor:'leveled', grp:'Level it yourself', label:''},
     {id:'levelProfit', grp:'Level it yourself', label:'Level profit', signed:'levelProfit', sk:'levelProfit',
       info:'Leveled − Buy-in (minus GCP if the leveled price is a 20q one). Profit from leveling it yourself.'},
     {id:'xp', grp:'Level it yourself', label:'Leveling', badge:true, sk:'xp',
@@ -321,8 +330,10 @@ function buildCols(mode, showAdj, plus){
       info:'Level profit ÷ the gem’s grind multiple (XP-to-max vs a normal gem) — profit per unit of leveling time. A gem that takes 7× as long has its leveling profit divided by 7, so slow gems compare fairly against fast ones. Hidden on the Normal tab (normal gems are the 1× baseline, so it equals Level profit). Empower-tier uses your Leveling-quality bracket.'},
     {id:'prize', grp:corrupt, label:p20lbl, price:'prize', ovr:'prizeField', sk:'prize', divider:true,
       info:'Market price of the corrupted +1-level'+qtxt+' gem — the standard corruption prize (single Vaal target).'},
+    {id:'prize', tradeFor:'prize', grp:corrupt, label:''},
     {id:'p23', grp:corrupt, label:p23lbl, price:'p23', ovr:'p23Field', sk:'p23', when:'q23',
       info:'poe.ninja price of the double-corrupt jackpot: +1 level AND 23% quality, corrupted — the best a double corrupt can roll. Only a fraction of double corrupts hit both; this is the ceiling value, worth checking on the trade site. (Off by default — enable in ⚙ Settings → Columns.)'},
+    {id:'p23', tradeFor:'p23', grp:corrupt, when:'q23', label:''},
     {id:'fail', grp:corrupt, label:'Fail value', plainMetric:'fail',
       info:'What you keep if the corruption does NOT add a level (same level'+qtxt+', corrupted) — you resell it. Controlled by "Failed-corruption resale".'},
     {id:'vaalEV', grp:corrupt, label:'Vaal EV', ev:['evVaal','winVaal','pV','invVaal','prize'], sk:'vaalEV',
@@ -357,6 +368,7 @@ function sortValue(g, m, key){
     case 'dblEV':       return m.evDbl;
     case 'adjDbl':      return m.adjDbl;
     case 'liquidity':   return g.maxList;
+    case 'conf':        return m.confCount;
     case 'name':        return g.name;
     default:            return m.evVaal;
   }
@@ -368,11 +380,21 @@ function plusLevelFor(gems){   // most common (maxLvl+1) among a category's gems
   for(const g of gems) counts[g.maxLvl+1] = (counts[g.maxLvl+1]||0)+1;
   return +Object.entries(counts).sort((a,b)=>b[1]-a[1])[0][0];
 }
-// poe.ninja-style confidence dot from listing count — only shown on thin (low/medium) prices
-function confDot(count, overridden){
-  if(overridden || count==null || count>10) return '';
-  const low = count<=3;
-  return `<span class="cf ${low?'cf-low':'cf-med'}" title="${count} listing${count===1?'':'s'} — ${low?'low':'medium'} confidence price">&#9679;</span>`;
+// confidence badge for the dedicated column: green (high) / amber (medium) / red (low)
+function confBadge(m){
+  const tier=m.confTier;
+  const cls={high:'cf-high',med:'cf-med',low:'cf-low',none:'cf-none'}[tier]||'cf-none';
+  const label={high:'High',med:'Medium',low:'Low',none:'no data'}[tier]||'no data';
+  const n=x=>x==null?'–':x;
+  const tip = tier==='none' ? 'no poe.ninja listing data'
+    : `${label} confidence — weakest priced listing ${m.confCount} (buy ${n(m.buyList)} · leveled ${n(m.leveledList)} · prize ${n(m.prizeList)})`;
+  return `<span class="cf-big ${cls}" title="${tip}">&#9679;</span>`;
+}
+// bigger trade link for the dedicated trade columns
+function tradeCell(g, field){
+  if(!(field in TRADE_FIELDS)) return '';
+  const p=tradeParams(g,field); if(!p) return '';
+  return `<a class="trd-cell" href="${tradeUrl(g,p[0],p[1],p[2])}" target="_blank" rel="noopener" title="Find this on pathofexile.com/trade">&#8599;</a>`;
 }
 function xpShort(n){
   if(n>=1e9) return (n/1e9).toFixed(2).replace(/\.?0+$/,'')+'B';
@@ -446,6 +468,10 @@ function renderTable(){
   const metricsById={};
   rows.forEach(g=> metricsById[g.id]=computeMetrics(g,a,mode));
 
+  // confidence filter (needs metrics)
+  const cf=$('confFilter').value;
+  if(cf!=='any') rows=rows.filter(g=>{ const c=metricsById[g.id].confCount; return c!=null && (cf==='high'?c>10:c>3); });
+
   // sort
   if(SORT.key==='name'){
     rows.sort((x,y)=> SORT.dir * x.name.localeCompare(y.name));
@@ -478,6 +504,12 @@ function renderTable(){
              `</div></td>`;
       } else if(c.badge){
         tds+=`<td class="${dv.trim()}">${xpBadge(g,a)}</td>`;
+      } else if(c.conf){
+        tds+=`<td class="conf-cell">${confBadge(m)}</td>`;
+      } else if(c.tradeFor){
+        const tf=c.tradeFor;
+        const field = tf==='buy'?'buy' : tf==='leveled'?m.leveledField : tf==='prize'?m.prizeField : 'P23';
+        tds+=`<td class="trd-col${dv}">${tradeCell(g, field)}</td>`;
       } else if(c.plainLiq){
         tds+=`<td class="dim">${g.maxList}</td>`;
       } else if(c.plainMetric){
@@ -486,7 +518,7 @@ function renderTable(){
         const field = m[c.ovr];
         const has = field && OVER[`${g.id}::${field}`]!=null;
         tds+=`<td class="ovr-cell${has?' has-ovr':''}${dv}" data-id="${g.id}" data-field="${field}" `+
-             `title="double-click to set a manual override">${fmt(m[c.price])}${confDot(m[c.price+'List'], has)}${tradeIcon(g, field)}</td>`;
+             `title="double-click to set a manual override">${fmt(m[c.price])}</td>`;
       } else if(c.signed){
         tds+=`<td class="${dv.trim()}">${fmtSigned(m[c.signed])}</td>`;
       } else if(c.ev){
@@ -859,7 +891,7 @@ function boot(){
     else if(HAS_API) loadFromServer(true);                  // local server: re-fetch the selected league
   });
   ASSUME_IDS.forEach(id=> $(id).addEventListener('input', ()=>{ saveSettings(); updateDblWarn(); if(GEMS.length) renderTable(); }));
-  ['unit','minList','search','metaQuality','metaQualityCost'].forEach(id=>
+  ['unit','minList','search','confFilter','metaQuality','metaQualityCost'].forEach(id=>
     $(id).addEventListener('input', ()=>{ saveSettings(); if(GEMS.length) renderTable(); }));
   // search clear (×)
   $('search').addEventListener('input', syncSearchClear);
