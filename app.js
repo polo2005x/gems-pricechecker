@@ -105,6 +105,14 @@ function buildGems(lines){
     if(!g.icon && l.icon) g.icon=l.icon;
     g.maxList=Math.max(g.maxList, l.listingCount||0);
   }
+  // map each gem to its Vaal counterpart's prices (e.g. Blade Vortex -> Vaal Blade Vortex).
+  // Vaal gems are named "Vaal X" or, for transfigured, "Vaal X (Transfigured Name)".
+  const vaalMap={};
+  for(const gg of Object.values(groups)){
+    if(!/^Vaal /.test(gg.name)) continue;
+    const mm=gg.name.match(/^Vaal .+ \((.+)\)$/);
+    vaalMap[mm ? mm[1] : gg.name.replace(/^Vaal /,'')] = gg.map;
+  }
   const out=[];
   for(const g of Object.values(groups)){
     const rows=Object.values(g.map);
@@ -120,10 +128,14 @@ function buildGems(lines){
     const qsAtMax = unc.filter(r=>r.pv.lvl===maxLvl).map(r=>r.pv.q);
     const topQ = Math.max(0,...qsAtMax);         // 20 for normal gems, 0 for exceptional
     const cat=categoryOf(g.name, maxLvl);
+    const vm=vaalMap[g.name];                                   // this gem's Vaal counterpart, if any
+    const vaalCell=vm ? vm[`${maxLvl+1}/20/1`] : null;          // Vaal version at +1 level / 20q, corrupted
     out.push({
       id:l_id(g.name), name:g.name, icon:g.icon,
       baseLvl, maxLvl, topQ, maxList:g.maxList,
       cat, xpEst:xpEstimate(cat, g.name),
+      vaalPrize: vaalCell ? vaalCell.chaos : null,
+      vaalPrizeList: vaalCell ? vaalCell.list : null,
       // Prices at both quality tiers (0 and 20). Some gems only trade at one tier
       // (e.g. Empower = 0q only; Eclipse / Greater supports = 20q only) — computeMetrics
       // picks whichever exists so nothing shows blank spuriously.
@@ -198,6 +210,7 @@ function computeMetrics(g, a, mode){
   m.leveled=leveled; m.leveledField=leveledField;
   m.prize=prize; m.prizeField=prizeField;
   m.p23 = val(g,'P23'); m.p23Field='P23';   // double-corrupt jackpot (+1 level / 23q)
+  m.vaalPrize = g.vaalPrize ?? null;         // Vaal-counterpart gem at +1 level / 20q (display only)
   // listing counts (confidence) for the displayed price cells
   const RL = g.rawList || {};
   m.buyList = RL.buy;
@@ -287,7 +300,7 @@ const COL_TOGGLES = [
   {id:'adjProfit',  label:'Time-adj. profit'},
   {id:'prize',      label:'+1 / 20q prize'},
   {id:'p23',        label:'+1 / 23q (double-corrupt)'},
-  {id:'p20disp',    label:'Vaal +1 / 20q (display copy)'},
+  {id:'p20disp',    label:'Vaal-version +1 / 20q'},
   {id:'fail',       label:'Fail value'},
   {id:'vaalEV',     label:'Vaal EV'},
   {id:'adjVaal',    label:'Vaal ÷ time'},
@@ -337,8 +350,8 @@ function buildCols(mode, showAdj, plus){
     {id:'p23', grp:corrupt, label:p23lbl, price:'p23', ovr:'p23Field', sk:'p23', when:'q23',
       info:'poe.ninja price of the double-corrupt jackpot: +1 level AND 23% quality, corrupted — the best a double corrupt can roll. Only a fraction of double corrupts hit both; this is the ceiling value, worth checking on the trade site. (Off by default — enable in ⚙ Settings → Columns.)'},
     {id:'p23', tradeFor:'p23', grp:corrupt, when:'q23', label:''},
-    {id:'p20disp', grp:corrupt, label:'Vaal '+p20lbl, plainMetric:'prize', when:'q23',
-      info:'Display-only copy of the single-Vaal +1/20 price, placed next to the double-corrupt 21/23 for easy comparison. Same value as the Prize column. Off by default — enable in ⚙ Settings → Columns.'},
+    {id:'p20disp', grp:corrupt, label:'Vaal '+p20lbl, plainMetric:'vaalPrize', sk:'vaalPrize', when:'q23',
+      info:'Price of the gem’s VAAL counterpart at +1 level / 20% quality (e.g. Vaal Blade Vortex, not Blade Vortex). Turning into the Vaal version is a possible corruption outcome, so a Vaal 21/20 usually needs a double corrupt. Display-only (never affects EV) but sortable. Blank if the gem has no Vaal version. Off by default — enable in ⚙ Settings → Columns.'},
     {id:'fail', grp:corrupt, label:'Fail value', plainMetric:'fail',
       info:'What you keep if the corruption does NOT add a level (same level'+qtxt+', corrupted) — you resell it. Controlled by "Failed-corruption resale".'},
     {id:'vaalEV', grp:corrupt, label:'Vaal EV', ev:['evVaal','winVaal','pV','invVaal','prize'], sk:'vaalEV',
@@ -368,6 +381,7 @@ function sortValue(g, m, key){
     case 'xp':          return g.xpEst;
     case 'prize':       return m.prize;
     case 'p23':         return m.p23;
+    case 'vaalPrize':   return m.vaalPrize;
     case 'vaalEV':      return m.evVaal;
     case 'adjVaal':     return m.adjVaal;
     case 'dblEV':       return m.evDbl;
