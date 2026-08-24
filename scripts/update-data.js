@@ -52,5 +52,15 @@ async function getJson(url){
   fs.writeFileSync(path.join(outDir, 'meta.json'), JSON.stringify({ league, game, when: Date.now() }));
   if(leagueNames.length) fs.writeFileSync(path.join(outDir, 'leagues.json'), JSON.stringify(leagueNames));
 
+  // gem display-name -> trade type/discriminator, for building pathofexile.com/trade links
+  try {
+    const items = await getJson('https://www.pathofexile.com/api/trade/data/items');
+    const gemEntries = [].concat(...(items.result || []).filter(c => /gem/i.test(c.id)).map(c => c.entries || []));
+    const map = {};
+    for(const e of gemEntries){ const name = e.text || e.type; if(name) map[name] = e.disc ? {t:e.type, d:e.disc} : {t:e.type}; }
+    fs.writeFileSync(path.join(outDir, 'trademap.json'), JSON.stringify(map));
+    console.log(`wrote trademap (${Object.keys(map).length} gem types)`);
+  } catch(e){ console.warn('trademap fetch failed (optional):', e.message); }
+
   console.log(`wrote ${slimGems.lines.length} gems for ${league} (${game}) to ${outDir}`);
 })().catch(e => { console.error('FAIL', e.message); process.exit(1); });

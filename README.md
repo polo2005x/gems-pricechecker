@@ -55,6 +55,9 @@ Everything is priced in **Chaos** (switch to Divine with the Currency dropdown).
 to max yourself* (free), and use *Gemcutter's Prisms* for quality.
 
 Every header has a **ⓘ** — hover it for the plain-English meaning. Click a header to sort by it.
+Every price cell has a small **↗** — click it to open that exact gem/level/quality on the official
+**pathofexile.com/trade** with the search prefilled (handy for double-corrupt 21/23 prices poe.ninja
+prices thinly). Open **⚙ Settings** to tweak assumptions, filter by min-listings, and **show/hide columns**.
 
 | Column | Meaning |
 |---|---|

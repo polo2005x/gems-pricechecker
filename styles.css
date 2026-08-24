@@ -114,6 +114,9 @@ tbody tr:hover td.name{background:#262b36}
 .ovr-cell.has-ovr{outline:1px dashed var(--accent); border-radius:4px}
 .ovr-cell.has-ovr::after{content:"✎"; font-size:9px; color:var(--accent); margin-left:3px; vertical-align:super}
 .ev .sub2{display:block; font-size:10.5px; color:var(--muted)}
+.trd{color:var(--accent2); text-decoration:none; font-size:11px; margin-left:5px; opacity:.4}
+.trd:hover{opacity:1}
+tbody tr:hover .trd{opacity:.8}
 .ci{color:var(--muted); cursor:help; font-size:11px; margin-left:3px; font-weight:400}
 .ci:hover{color:var(--accent)}
 th.sortable{cursor:pointer; user-select:none}

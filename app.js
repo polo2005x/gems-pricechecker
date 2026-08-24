@@ -470,7 +470,7 @@ function renderTable(){
         const field = m[c.ovr];
         const has = field && OVER[`${g.id}::${field}`]!=null;
         tds+=`<td class="ovr-cell${has?' has-ovr':''}${dv}" data-id="${g.id}" data-field="${field}" `+
-             `title="double-click to set a manual override">${fmt(m[c.price])}</td>`;
+             `title="double-click to set a manual override">${fmt(m[c.price])}${tradeIcon(g, field)}</td>`;
       } else if(c.signed){
         tds+=`<td class="${dv.trim()}">${fmtSigned(m[c.signed])}</td>`;
       } else if(c.ev){
@@ -622,6 +622,36 @@ function apiBase(){ return `https://poe.ninja/${GAME}/api/economy/stash/current`
 function gemsUrl(){ return `${apiBase()}/item/overview?league=${encodeURIComponent($('league').value)}&type=SkillGem`; }
 function currUrl(){ return `${apiBase()}/currency/overview?league=${encodeURIComponent($('league').value)}&type=Currency`; }
 function refreshLinks(){ $('lnkGems').href=gemsUrl(); $('lnkCurr').href=currUrl(); }
+
+// ---------- trade links (pathofexile.com/trade) ----------
+let TRADEMAP = {};   // gem name -> {t:type, d?:discriminator}
+const TRADE_FIELDS = { buy:'baseLvl0', L0:'max0', L20:'max20', P0:'p0', P20:'p20', P23:'p23' };
+function tradeParams(g, field){
+  switch(field){
+    case 'buy': return [g.baseLvl, 0, false];
+    case 'L0':  return [g.maxLvl, 0, false];
+    case 'L20': return [g.maxLvl, 20, false];
+    case 'P0':  return [g.maxLvl+1, 0, true];
+    case 'P20': return [g.maxLvl+1, 20, true];
+    case 'P23': return [g.maxLvl+1, 23, true];
+    default: return null;
+  }
+}
+function tradeUrl(g, level, quality, corrupted){
+  const league = (META_INFO && META_INFO.league) || $('league').value || 'Standard';
+  const t = TRADEMAP[g.name];
+  const type = t ? (t.d ? {option:t.t, discriminator:t.d} : t.t) : g.name;   // fallback: plain name
+  const filters = { gem_level:{min:level}, corrupted:{option: corrupted?'true':'false'} };
+  if(quality>0) filters.quality = {min:quality};
+  const q = { query:{ status:{option:'securable'}, type, filters:{misc_filters:{filters}} }, sort:{price:'asc'} };
+  return `https://www.pathofexile.com/trade/search/${encodeURIComponent(league)}?q=${encodeURIComponent(JSON.stringify(q))}`;
+}
+function tradeIcon(g, field){
+  if(!(field in TRADE_FIELDS)) return '';
+  const p = tradeParams(g, field); if(!p) return '';
+  return `<a class="trd" href="${tradeUrl(g,p[0],p[1],p[2])}" target="_blank" rel="noopener" `+
+         `title="Find this on pathofexile.com/trade" onclick="event.stopPropagation()">&#8599;</a>`;
+}
 
 // ---------- league dropdown ----------
 function ensureLeagueOption(name){
@@ -812,6 +842,7 @@ function boot(){
 
 // Decide how to load data: local serve.js server, static host (Pages), or local file.
 async function initData(){
+  try{ const r=await fetch('json/trademap.json',{cache:'no-store'}); if(r.ok) TRADEMAP=await r.json(); }catch{}
   if(serverMode()){
     // http(s): could be the local serve.js helper OR a static host like GitHub Pages.
     // Only the local helper lives on localhost, so probe there (avoids a stray 404 on Pages).

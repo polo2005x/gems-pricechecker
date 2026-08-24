@@ -51,6 +51,13 @@ async function refresh(game, league){
     const names = (idx.economyLeagues || []).map(l => l.name).filter(Boolean);
     if(names.length) fs.writeFileSync(path.join(ROOT, 'json', 'leagues.json'), JSON.stringify(names));
   } catch { /* league list optional */ }
+  try {
+    const items = await (await fetch('https://www.pathofexile.com/api/trade/data/items', { headers:{'user-agent':'gems-pricechecker-bot'} })).json();
+    const ge = [].concat(...(items.result || []).filter(c => /gem/i.test(c.id)).map(c => c.entries || []));
+    const map = {};
+    for(const e of ge){ const n = e.text || e.type; if(n) map[n] = e.disc ? {t:e.type, d:e.disc} : {t:e.type}; }
+    if(Object.keys(map).length) fs.writeFileSync(path.join(ROOT, 'json', 'trademap.json'), JSON.stringify(map));
+  } catch { /* trademap optional */ }
   console.log(`  ↻ downloaded ${league} (${game}) — ${(gText.length/1e6).toFixed(1)} MB gems` +
               (cText ? ' + currency' : '') + ` @ ${new Date().toLocaleTimeString()}`);
   return { ok:true, when:Date.now(), gemsBytes:gText.length, hasCurrency:!!cText, league, game };
