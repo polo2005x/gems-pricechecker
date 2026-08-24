@@ -546,11 +546,13 @@ function renderTable(){
 }
 
 // ---------- "Top picks" dashboard ----------
-const CAT_TAG = { normal:'Normal', exceptional:'Exceptional', meta:'Empower-tier' };
+const CAT_TAG = { normal:'Normal', transfigured:'Transfigured', exceptional:'Exceptional', meta:'Empower-tier' };
 function renderDashboard(a){
   const minL = +$('minList').value||0;
-  const rows = GEMS.filter(g=>g.maxList>=minL && !BLACKLIST[g.id])
-                   .map(g=>({g, m:computeMetrics(g, a, g.cat==='meta'?'meta':'quality')}));
+  let rows = GEMS.filter(g=>g.maxList>=minL && !BLACKLIST[g.id])
+                 .map(g=>({g, m:computeMetrics(g, a, g.cat==='meta'?'meta':'quality')}));
+  const cf=$('confFilter').value;   // honour the confidence filter so top picks aren't faked by thin prices
+  if(cf!=='any') rows=rows.filter(x=>{ const c=x.m.confCount; return c!=null && (cf==='high'?c>10:c>3); });
   const lists = [
     {title:'Best to level — profit',            sub:'Level profit',                       val:x=>x.m.levelProfit},
     {title:'Best to level — profit ÷ time',     sub:'Level profit per unit leveling time',val:x=>x.m.adjProfit},
