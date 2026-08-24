@@ -228,6 +228,9 @@ function computeMetrics(g, a, mode){
     return proxy!=null ? proxy : 0;               // corrupted same-level price (default)
   };
   m.fail = failVal(failRaw, base);
+  // sanity cap: a failed corrupt (same level) can't rationally be worth more than the +1-level prize.
+  // Guards against poe.ninja outliers (e.g. a 2-listing 20/20c mispriced 1000x) inflating the EV.
+  if(prize!=null && m.fail>prize) m.fail = prize;
 
   // expected NET investment to produce ONE +1 gem (accounts for reselling the bricks):
   //   ~1/p attempts, each costs base+orb; you recover FailValue on the (1/p − 1) misses.
