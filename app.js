@@ -747,7 +747,9 @@ async function initData(){
       loadStaticData();
     }
   } else {
-    // opened as a local file — restore cache or show the manual loader
+    // opened as a local file — the manual loader is the only way to get data here
+    IS_STATIC_HOST = false;
+    $('loadBtn').classList.remove('hidden');
     const cached=load(LS.data,null);
     if(cached?.g){
       try{ ingest(cached.g, cached.c, cached.meta||{league:$('league').value}); }

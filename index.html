@@ -33,7 +33,8 @@
       <input type="checkbox" id="autoRefresh" /> auto every
       <input type="number" id="autoMin" value="10" min="1" style="width:4em" /> min
     </label>
-    <button id="loadBtn">Load data manually</button>
+    <span id="freshness" class="muted"></span>
+    <button id="loadBtn" class="hidden">Load data manually</button>
   </div>
 </header>
 
@@ -159,7 +160,6 @@
     </label>
   </span>
   <span class="spacer"></span>
-  <span id="freshness" class="muted"></span>
   <span id="rowCount" class="muted"></span>
 </section>
 
