@@ -117,6 +117,14 @@ tbody tr:hover td.name{background:#262b36}
 .trd{color:var(--accent2); text-decoration:none; font-size:11px; margin-left:5px; opacity:.4}
 .trd:hover{opacity:1}
 tbody tr:hover .trd{opacity:.8}
+.trd-link{color:var(--accent2); text-decoration:none; font-size:12px; margin-left:6px; white-space:nowrap}
+.trd-link:hover{text-decoration:underline}
+.blk-btn{background:none; border:none; color:var(--muted); cursor:pointer; font-size:13px; padding:0 3px; opacity:.3; margin-left:auto}
+.gemname:hover .blk-btn, .blk-btn:hover{opacity:1}
+.blk-btn:hover{color:var(--bad)}
+tr.blk td{opacity:.4}
+tr.blk:hover td{opacity:.8}
+tr.blk .blk-btn{opacity:.75; color:var(--good)}
 .ci{color:var(--muted); cursor:help; font-size:11px; margin-left:3px; font-weight:400}
 .ci:hover{color:var(--accent)}
 th.sortable{cursor:pointer; user-select:none}

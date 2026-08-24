@@ -102,6 +102,7 @@
     </label>
     <label title="Cost of a double corruption per attempt (Temple 'Locus of Corruption' / service). This is never free.">
       Double-corrupt cost <input id="dblCost" type="number" step="1" value="0" /> chaos
+      <a class="temple-trade trd-link" target="_blank" rel="noopener" title="Find open Locus of Corruption temples on the trade site">&#8599; check price</a>
       <span id="dblWarn" class="warn"></span>
     </label>
     <label title="If a corruption fails (no +1 level), you're left with a corrupted gem. Its resale value offsets the loss. Default = the unchanged-but-corrupted price from data.">
@@ -119,6 +120,12 @@
 
     <h3 class="modal-sub">Columns to show</h3>
     <div id="colToggles" class="col-toggles"></div>
+
+    <p class="muted" style="margin-top:14px">
+      Ignored gems: <b id="blkCount">0</b> — sent to the bottom &amp; greyed out.
+      Use the <b>&#8856;</b> next to a gem's name to ignore it.
+      <button id="blkClear" style="margin-left:8px">Clear all</button>
+    </p>
   </div>
 </div>
 
@@ -132,7 +139,9 @@
     <p class="muted">A Temple double corrupt (Locus of Corruption) isn't free — it costs currency to run.
       Enter what it costs you so the <b>Double EV</b> columns aren't over-optimistic. You can change it
       anytime in <b>⚙ Settings</b>.</p>
-    <label>Double-corrupt cost <input id="templeInput" type="number" step="1" min="0" value="0" /> chaos</label>
+    <label>Double-corrupt cost <input id="templeInput" type="number" step="1" min="0" value="0" /> chaos
+      <a class="temple-trade trd-link" target="_blank" rel="noopener" title="Find open Locus of Corruption temples on the trade site">&#8599; check price</a>
+    </label>
     <div class="modal-actions">
       <button id="templeSkip">Skip for now</button>
       <button id="templeSave" class="primary">Save</button>

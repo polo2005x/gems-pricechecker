@@ -285,6 +285,7 @@ const COL_TOGGLES = [
 const COL_DEFAULT_HIDDEN = new Set(['p23']);   // double-corrupt column off by default
 let COLVIS = load('gpc_colvis', {});
 const colVisible = (id)=> COLVIS[id] ?? !COL_DEFAULT_HIDDEN.has(id);
+let BLACKLIST = load('gpc_blacklist', {});   // { gemId: 1 } — ignored gems (sent to bottom, greyed)
 function buildColToggles(){
   const box=$('colToggles'); if(!box) return;
   box.innerHTML = COL_TOGGLES.map(c=>
@@ -444,6 +445,8 @@ function renderTable(){
       return SORT.dir*(A-B);
     });
   }
+  // ignored gems sink to the bottom (stable — keeps the sort order within each group)
+  rows.sort((x,y)=> (BLACKLIST[x.id]?1:0) - (BLACKLIST[y.id]?1:0));
 
   const shown = rows;
   $('rowCount').textContent = `${rows.length} ${CAT_LABEL[CAT]} gems`;
@@ -456,9 +459,11 @@ function renderTable(){
     for(const c of cols){
       const dv = c.divider ? ' divider' : '';
       if(c.name){
+        const bl = !!BLACKLIST[g.id];
         tds+=`<td class="name"><div class="gemname">`+
              (g.icon?`<img src="${g.icon}" loading="lazy" alt="">`:'')+
              `<span title="base L${g.baseLvl} → max L${g.maxLvl}${g.topQ?` / up to ${g.topQ}q`:''}; corrupt target L${g.maxLvl+1}">${g.name}</span>`+
+             `<button class="blk-btn" data-blk="${g.id}" title="${bl?'Track this gem again':'Ignore this gem (send to bottom)'}">${bl?'↺':'⊘'}</button>`+
              `</div></td>`;
       } else if(c.badge){
         tds+=`<td class="${dv.trim()}">${xpBadge(g,a)}</td>`;
@@ -489,7 +494,7 @@ function renderTable(){
         }
       }
     }
-    body+=`<tr>${tds}</tr>`;
+    body+=`<tr class="${BLACKLIST[g.id]?'blk':''}">${tds}</tr>`;
   }
   tbl.innerHTML=`<thead>${grpRow}${colRow}</thead><tbody>${body}</tbody>`;
 }
@@ -498,7 +503,7 @@ function renderTable(){
 const CAT_TAG = { normal:'Normal', exceptional:'Exceptional', meta:'Empower-tier' };
 function renderDashboard(a){
   const minL = +$('minList').value||0;
-  const rows = GEMS.filter(g=>g.maxList>=minL)
+  const rows = GEMS.filter(g=>g.maxList>=minL && !BLACKLIST[g.id])
                    .map(g=>({g, m:computeMetrics(g, a, g.cat==='meta'?'meta':'quality')}));
   const lists = [
     {title:'Best to level — profit',            sub:'Level profit',                       val:x=>x.m.levelProfit},
@@ -533,6 +538,20 @@ function onDashClick(e){
   const cat=li.dataset.cat, name=li.dataset.name;
   document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active', t.dataset.cat===cat));
   CAT=cat; $('search').value=name; syncSearchClear(); saveSettings(); renderTable();
+}
+
+// ignore / track toggle (blacklist)
+function onBlacklistClick(e){
+  const b=e.target.closest('[data-blk]'); if(!b) return;
+  e.stopPropagation();
+  const id=b.dataset.blk;
+  if(BLACKLIST[id]) delete BLACKLIST[id]; else BLACKLIST[id]=1;
+  save('gpc_blacklist', BLACKLIST);
+  updateBlkCount();
+  renderTable();
+}
+function updateBlkCount(){
+  const el=$('blkCount'); if(el) el.textContent = Object.keys(BLACKLIST).length;
 }
 
 // header click → sort
@@ -585,6 +604,7 @@ function ingest(gemsJson, currJson, meta){
   renderTable();
   META_INFO = meta || null;
   updateFreshness();
+  updateTempleLinks();
   setStatus(`Loaded ${GEMS.length} leveling-viable gems for ${meta.league}`, 'ok');
 }
 const round2=(v)=>Math.round(v*100)/100;
@@ -651,6 +671,18 @@ function tradeIcon(g, field){
   const p = tradeParams(g, field); if(!p) return '';
   return `<a class="trd" href="${tradeUrl(g,p[0],p[1],p[2])}" target="_blank" rel="noopener" `+
          `title="Find this on pathofexile.com/trade" onclick="event.stopPropagation()">&#8599;</a>`;
+}
+// double-corrupt temple: Chronicle of Atzoatl with an open Locus of Corruption (Tier 3) room
+function templeTradeUrl(){
+  const league = (META_INFO && META_INFO.league) || $('league').value || 'Standard';
+  const q = { query:{ status:{option:'securable'}, type:'Chronicle of Atzoatl',
+    stats:[{type:'and', filters:[{id:'pseudo.pseudo_temple_corruption_room_3', value:{option:1}}]}] },
+    sort:{price:'asc'} };
+  return `https://www.pathofexile.com/trade/search/${encodeURIComponent(league)}?q=${encodeURIComponent(JSON.stringify(q))}`;
+}
+function updateTempleLinks(){
+  const url=templeTradeUrl();
+  document.querySelectorAll('.temple-trade').forEach(a=> a.href=url);
 }
 
 // ---------- league dropdown ----------
@@ -790,7 +822,7 @@ function boot(){
   $('applyPaste').onclick=applyPaste;
   document.querySelectorAll('[data-close]').forEach(b=> b.onclick=()=>$(b.dataset.close).classList.add('hidden'));
   // settings modal: gear opens it; click backdrop or Esc closes any modal
-  $('settingsBtn').onclick=()=>$('settingsModal').classList.remove('hidden');
+  $('settingsBtn').onclick=()=>{ updateTempleLinks(); $('settingsModal').classList.remove('hidden'); };
   document.querySelectorAll('.modal').forEach(m=> m.addEventListener('click', e=>{ if(e.target===m) m.classList.add('hidden'); }));
   document.addEventListener('keydown', e=>{ if(e.key==='Escape') document.querySelectorAll('.modal:not(.hidden)').forEach(m=>m.classList.add('hidden')); });
   // one-time double-corrupt cost prompt
@@ -803,12 +835,15 @@ function boot(){
   $('templeSkip').onclick=skipTemple; $('templeSkipX').onclick=skipTemple;
   $('tbl').addEventListener('dblclick', onCellDblClick);
   $('tbl').addEventListener('click', onHeaderClick);
+  $('tbl').addEventListener('click', onBlacklistClick);
   $('dash').addEventListener('click', onDashClick);
+  $('blkClear').onclick = ()=>{ BLACKLIST={}; save('gpc_blacklist',BLACKLIST); updateBlkCount(); if(GEMS.length) renderTable(); };
+  updateBlkCount();
   document.querySelectorAll('.tab').forEach(t=> t.onclick=()=>{
     document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
     t.classList.add('active'); CAT=t.dataset.cat; renderTable();
   });
-  $('league').addEventListener('input', ()=>{ refreshLinks(); saveSettings(); });
+  $('league').addEventListener('input', ()=>{ refreshLinks(); updateTempleLinks(); saveSettings(); });
   ASSUME_IDS.forEach(id=> $(id).addEventListener('input', ()=>{ saveSettings(); updateDblWarn(); if(GEMS.length) renderTable(); }));
   ['unit','minList','search','metaQuality','metaQualityCost'].forEach(id=>
     $(id).addEventListener('input', ()=>{ saveSettings(); if(GEMS.length) renderTable(); }));
