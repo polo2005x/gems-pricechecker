@@ -76,6 +76,8 @@ const META_RE = /(Empower|Enlighten|Enhance) Support$/;   // matches Awakened va
 function categoryOf(name, maxLvl){
   if(name === 'Eclipse Support' || META_RE.test(name)) return 'meta';
   if(/ Support$/.test(name) && maxLvl!=null && maxLvl<=3) return 'exceptional';
+  // transfigured skill gems carry a trade discriminator (alt_x/y/z) — incl. the "of Trarthus" (Trarthan) set
+  if(TRADEMAP[name] && TRADEMAP[name].d) return 'transfigured';
   return 'normal';
 }
 
@@ -273,7 +275,7 @@ function fmtP(chaos){
 
 // ---------- columns (built per tab; q = quality-aware) ----------
 let SORT = { key:'vaalEV', dir:-1 };
-const CAT_LABEL = { normal:'normal', exceptional:'exceptional', meta:'Empower/Enlighten/Enhance/Eclipse' };
+const CAT_LABEL = { normal:'normal', transfigured:'transfigured', exceptional:'exceptional', meta:'Empower/Enlighten/Enhance/Eclipse' };
 
 // user-toggleable columns (order matches display); hidden-by-default set per the user
 const COL_TOGGLES = [
@@ -439,7 +441,8 @@ function renderTable(){
   const tbl=$('tbl');
   const mode = CAT === 'meta' ? 'meta' : 'quality';
   const plus = plusLevelFor(GEMS.filter(g=>g.cat===CAT));   // +1 level for labels (21 normal, 4 exceptional)
-  const cols = buildCols(mode, CAT!=='normal', plus);   // hide Time-adj. profit on the baseline Normal tab
+  const showAdj = CAT!=='normal' && CAT!=='transfigured';   // grind=1 on both, so Time-adj cols are redundant
+  const cols = buildCols(mode, showAdj, plus);
 
   // header: group row + column row
   let grpRow='<tr>', colRow='<tr>';
