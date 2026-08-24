@@ -287,6 +287,7 @@ const COL_TOGGLES = [
   {id:'adjProfit',  label:'Time-adj. profit'},
   {id:'prize',      label:'+1 / 20q prize'},
   {id:'p23',        label:'+1 / 23q (double-corrupt)'},
+  {id:'p20disp',    label:'Vaal +1 / 20q (display copy)'},
   {id:'fail',       label:'Fail value'},
   {id:'vaalEV',     label:'Vaal EV'},
   {id:'adjVaal',    label:'Vaal ÷ time'},
@@ -294,7 +295,7 @@ const COL_TOGGLES = [
   {id:'adjDbl',     label:'Double ÷ time'},
   {id:'liq',        label:'Listings'},
 ];
-const COL_DEFAULT_HIDDEN = new Set(['p23']);   // double-corrupt column off by default
+const COL_DEFAULT_HIDDEN = new Set(['p23','p20disp']);   // double-corrupt + 21/20 display copy off by default
 let COLVIS = load('gpc_colvis', {});
 const colVisible = (id)=> COLVIS[id] ?? !COL_DEFAULT_HIDDEN.has(id);
 let BLACKLIST = load('gpc_blacklist', {});   // { gemId: 1 } — ignored gems (sent to bottom, greyed)
@@ -336,6 +337,8 @@ function buildCols(mode, showAdj, plus){
     {id:'p23', grp:corrupt, label:p23lbl, price:'p23', ovr:'p23Field', sk:'p23', when:'q23',
       info:'poe.ninja price of the double-corrupt jackpot: +1 level AND 23% quality, corrupted — the best a double corrupt can roll. Only a fraction of double corrupts hit both; this is the ceiling value, worth checking on the trade site. (Off by default — enable in ⚙ Settings → Columns.)'},
     {id:'p23', tradeFor:'p23', grp:corrupt, when:'q23', label:''},
+    {id:'p20disp', grp:corrupt, label:'Vaal '+p20lbl, plainMetric:'prize', when:'q23',
+      info:'Display-only copy of the single-Vaal +1/20 price, placed next to the double-corrupt 21/23 for easy comparison. Same value as the Prize column. Off by default — enable in ⚙ Settings → Columns.'},
     {id:'fail', grp:corrupt, label:'Fail value', plainMetric:'fail',
       info:'What you keep if the corruption does NOT add a level (same level'+qtxt+', corrupted) — you resell it. Controlled by "Failed-corruption resale".'},
     {id:'vaalEV', grp:corrupt, label:'Vaal EV', ev:['evVaal','winVaal','pV','invVaal','prize'], sk:'vaalEV',
