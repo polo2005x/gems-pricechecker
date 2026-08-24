@@ -486,11 +486,14 @@ function renderDashboard(a){
   html += '</div>';
   $('dash').innerHTML = html;
 }
+function syncSearchClear(){
+  const b=$('searchClear'); if(b) b.classList.toggle('hidden', !$('search').value);
+}
 function onDashClick(e){
   const li=e.target.closest('li[data-cat]'); if(!li) return;
   const cat=li.dataset.cat, name=li.dataset.name;
   document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active', t.dataset.cat===cat));
-  CAT=cat; $('search').value=name; saveSettings(); renderTable();
+  CAT=cat; $('search').value=name; syncSearchClear(); saveSettings(); renderTable();
 }
 
 // header click → sort
@@ -720,10 +723,9 @@ function boot(){
   ['unit','minList','showAll','search','metaQuality','metaQualityCost'].forEach(id=>
     $(id).addEventListener('input', ()=>{ saveSettings(); if(GEMS.length) renderTable(); }));
   // search clear (×)
-  const syncClear = ()=> $('searchClear').classList.toggle('hidden', !$('search').value);
-  $('search').addEventListener('input', syncClear);
+  $('search').addEventListener('input', syncSearchClear);
   $('searchClear').onclick = ()=>{ $('search').value=''; $('search').dispatchEvent(new Event('input')); $('search').focus(); };
-  syncClear();
+  syncSearchClear();
   // live "prices X old · next update" ticker
   setInterval(updateFreshness, 30000);
   // sort dropdown drives the unified SORT state
