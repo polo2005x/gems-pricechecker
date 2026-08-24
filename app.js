@@ -581,7 +581,9 @@ function renderDashboard(a){
     {title:'Best single Vaal ÷ time',           sub:'Vaal EV per unit leveling time',     val:x=>x.m.adjVaal},
     {title:'Best double corrupt',               sub:'Double EV / attempt',                val:x=>x.m.evDbl},
     {title:'Best double corrupt ÷ time',        sub:'Double EV per unit leveling time',   val:x=>x.m.adjDbl},
-    {title:'Biggest +1 prize',                  sub:'Corrupted +1 level value',           val:x=>x.m.prize, plain:true},
+    {title:'Biggest +1 prize',                  sub:'Corrupted +1 level / 20q value',     val:x=>x.m.prize, plain:true},
+    {title:'Biggest +1/23 prize',               sub:'Double-corrupt +1 level / 23q value',val:x=>x.m.p23, plain:true},
+    {title:'Biggest Vaal +1 prize',             sub:'Vaal-counterpart +1 level / 20q value', val:x=>x.m.vaalPrize, plain:true},
   ];
   let html='<div class="dash-grid">';
   for(const L of lists){
