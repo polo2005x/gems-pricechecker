@@ -46,6 +46,11 @@ async function refresh(game, league){
   fs.writeFileSync(path.join(ROOT, 'json', 'gems.json'), gText);
   if(cText) fs.writeFileSync(path.join(ROOT, 'json', 'currency.json'), cText);
   fs.writeFileSync(path.join(ROOT, 'json', 'meta.json'), JSON.stringify({ league, game, when: Date.now() }));
+  try {
+    const idx = await (await fetch(`https://poe.ninja/${game}/api/data/index-state`)).json();
+    const names = (idx.economyLeagues || []).map(l => l.name).filter(Boolean);
+    if(names.length) fs.writeFileSync(path.join(ROOT, 'json', 'leagues.json'), JSON.stringify(names));
+  } catch { /* league list optional */ }
   console.log(`  ↻ downloaded ${league} (${game}) — ${(gText.length/1e6).toFixed(1)} MB gems` +
               (cText ? ' + currency' : '') + ` @ ${new Date().toLocaleTimeString()}`);
   return { ok:true, when:Date.now(), gemsBytes:gText.length, hasCurrency:!!cText, league, game };

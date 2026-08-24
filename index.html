@@ -13,14 +13,8 @@
     <span class="sub">poe.ninja economy &middot; level &amp; corruption profit</span>
   </div>
   <div class="league-box">
-    <label>Game
-      <select id="game">
-        <option value="poe1" selected>PoE1</option>
-        <option value="poe2">PoE2</option>
-      </select>
-    </label>
     <label>League
-      <input id="league" type="text" value="Allflame" spellcheck="false" />
+      <select id="league"></select>
     </label>
     <label>Currency
       <select id="unit">
@@ -118,7 +112,13 @@
         <option value="buy">= your buy-in cost</option>
       </select>
     </label>
+    <label title="Hide gems with fewer than this many poe.ninja listings (thin/unreliable prices).">
+      Min listings <input id="minList" type="number" value="5" min="0" style="width:5em" />
+    </label>
     </div>
+
+    <h3 class="modal-sub">Columns to show</h3>
+    <div id="colToggles" class="col-toggles"></div>
   </div>
 </div>
 
@@ -161,8 +161,6 @@
       <option value="name">Name (A–Z)</option>
     </select>
   </label>
-  <label>Min listings <input id="minList" type="number" value="5" min="0" style="width:5em" /></label>
-  <label class="chk"><input type="checkbox" id="showAll" /> show all rows</label>
   <span id="metaControls" class="meta-ctrl hidden">
     <label title="Quality on Empower-tier gems gives 5% increased experience per 1% quality — it speeds up leveling.&#10;&#10;10% — matching socket colour (no GCP)&#10;20% — normal quality 20 gem (GCP)&#10;30% — + matching socket colour&#10;38% — + +8 quality socketed&#10;50% — Atziri's Disfavour + normal quality&#10;60% — + matching colour">
       Leveling quality

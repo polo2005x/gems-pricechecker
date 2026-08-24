@@ -13,6 +13,7 @@ let GEMS = [];            // computed gem rows (all)
 let CURR = {};            // { gcp, vaal, div }  (chaos values, from currency data if present)
 let OVER = load(LS.overrides, {});   // { "<detailsId>::<field>": number }
 let CAT = 'top';
+const GAME = 'poe1';                  // this tool is PoE1-only
 
 // ---------- tiny helpers ----------
 const $ = (id) => document.getElementById(id);
@@ -39,7 +40,7 @@ function readAssume(){
 }
 function saveSettings(){
   const s={}; ASSUME_IDS.forEach(id => s[id]=$(id).value);
-  ['game','league','unit','sort','minList','showAll','search','autoRefresh','autoMin','metaQuality','metaQualityCost'].forEach(id=>{
+  ['league','unit','sort','minList','search','autoRefresh','autoMin','metaQuality','metaQualityCost'].forEach(id=>{
     const el=$(id); if(!el) return; s[id] = el.type==='checkbox'?el.checked:el.value;
   });
   save(LS.settings, s);
@@ -265,42 +266,74 @@ function fmtP(chaos){
 let SORT = { key:'vaalEV', dir:-1 };
 const CAT_LABEL = { normal:'normal', exceptional:'exceptional', meta:'Empower/Enlighten/Enhance/Eclipse' };
 
-function buildCols(mode, showAdj){
+// user-toggleable columns (order matches display); hidden-by-default set per the user
+const COL_TOGGLES = [
+  {id:'buy',        label:'Buy-in'},
+  {id:'leveled',    label:'Leveled'},
+  {id:'levelProfit',label:'Level profit'},
+  {id:'xp',         label:'Leveling (XP tier)'},
+  {id:'adjProfit',  label:'Time-adj. profit'},
+  {id:'prize',      label:'+1 / 20q prize'},
+  {id:'p23',        label:'+1 / 23q (double-corrupt)'},
+  {id:'fail',       label:'Fail value'},
+  {id:'vaalEV',     label:'Vaal EV'},
+  {id:'adjVaal',    label:'Vaal ÷ time'},
+  {id:'dblEV',      label:'Double EV'},
+  {id:'adjDbl',     label:'Double ÷ time'},
+  {id:'liq',        label:'Listings'},
+];
+const COL_DEFAULT_HIDDEN = new Set(['p23']);   // double-corrupt column off by default
+let COLVIS = load('gpc_colvis', {});
+const colVisible = (id)=> COLVIS[id] ?? !COL_DEFAULT_HIDDEN.has(id);
+function buildColToggles(){
+  const box=$('colToggles'); if(!box) return;
+  box.innerHTML = COL_TOGGLES.map(c=>
+    `<label class="chk"><input type="checkbox" data-col="${c.id}" ${colVisible(c.id)?'checked':''}/> ${c.label}</label>`
+  ).join('');
+  box.querySelectorAll('input[data-col]').forEach(inp=> inp.onchange=()=>{
+    COLVIS[inp.dataset.col]=inp.checked; save('gpc_colvis',COLVIS); if(GEMS.length) renderTable();
+  });
+}
+
+function buildCols(mode, showAdj, plus){
   const qa = mode !== 'meta';
   const qtxt = qa ? ', 20% quality' : '';
   const corrupt = qa ? 'Corrupt it (20% quality)' : 'Corrupt it';
+  const p20lbl = qa ? `${plus}/20` : 'Prize';   // level-aware: 21/20 normal, 4/20 exceptional
+  const p23lbl = `${plus}/23`;
   const cols = [
     {name:true, grp:'', label:'Gem'},
-    {grp:'Level it yourself', label:'Buy-in', price:'buy', ovr:'buyField', sk:'buy',
+    {id:'buy', grp:'Level it yourself', label:'Buy-in', price:'buy', ovr:'buyField', sk:'buy',
       info:'What you pay up front — the level-1 gem (0% quality where it exists).'},
-    {grp:'Level it yourself', label:'Leveled', price:'leveled', ovr:'leveledField', sk:'leveled',
+    {id:'leveled', grp:'Level it yourself', label:'Leveled', price:'leveled', ovr:'leveledField', sk:'leveled',
       info:'poe.ninja price once leveled to max level. Uses 0% quality when the gem trades there, otherwise the 20% price (many low-level supports only sell at 20q).'},
-    {grp:'Level it yourself', label:'Level profit', signed:'levelProfit', sk:'levelProfit',
+    {id:'levelProfit', grp:'Level it yourself', label:'Level profit', signed:'levelProfit', sk:'levelProfit',
       info:'Leveled − Buy-in (minus GCP if the leveled price is a 20q one). Profit from leveling it yourself.'},
-    {grp:'Level it yourself', label:'Leveling', badge:true, sk:'xp',
+    {id:'xp', grp:'Level it yourself', label:'Leveling', badge:true, sk:'xp',
       info:'How much XP it takes to level to max, as Fast / Normal / Hard / Brutal (vs a normal L20 gem ≈240M). Exceptional & Empower-tier ≈1.67B to L3 (~7×); Awakened ≈2B. On the Empower-tier tab the badge follows your Leveling-quality bracket. Hover a badge for the gem’s figure and how many times a normal gem it is.'},
-    {grp:'Level it yourself', label:'Time-adj. profit', signed:'adjProfit', sk:'adjProfit', when:'adj',
+    {id:'adjProfit', grp:'Level it yourself', label:'Time-adj. profit', signed:'adjProfit', sk:'adjProfit', when:'adj',
       info:'Level profit ÷ the gem’s grind multiple (XP-to-max vs a normal gem) — profit per unit of leveling time. A gem that takes 7× as long has its leveling profit divided by 7, so slow gems compare fairly against fast ones. Hidden on the Normal tab (normal gems are the 1× baseline, so it equals Level profit). Empower-tier uses your Leveling-quality bracket.'},
-    {grp:corrupt, label:'Prize', price:'prize', ovr:'prizeField', sk:'prize', divider:true,
-      info:'The jackpot: market price of the corrupted +1-level'+qtxt+' gem.'},
-    {grp:corrupt, label:'21/23 (dbl)', price:'p23', ovr:'p23Field', sk:'p23', when:'q23',
-      info:'poe.ninja price of the double-corrupt jackpot: +1 level AND 23% quality, corrupted — the best a double corrupt can roll. Only a fraction of double corrupts hit both; this is the ceiling value, worth checking on the trade site.'},
-    {grp:corrupt, label:'Fail value', plainMetric:'fail',
+    {id:'prize', grp:corrupt, label:p20lbl, price:'prize', ovr:'prizeField', sk:'prize', divider:true,
+      info:'Market price of the corrupted +1-level'+qtxt+' gem — the standard corruption prize (single Vaal target).'},
+    {id:'p23', grp:corrupt, label:p23lbl, price:'p23', ovr:'p23Field', sk:'p23', when:'q23',
+      info:'poe.ninja price of the double-corrupt jackpot: +1 level AND 23% quality, corrupted — the best a double corrupt can roll. Only a fraction of double corrupts hit both; this is the ceiling value, worth checking on the trade site. (Off by default — enable in ⚙ Settings → Columns.)'},
+    {id:'fail', grp:corrupt, label:'Fail value', plainMetric:'fail',
       info:'What you keep if the corruption does NOT add a level (same level'+qtxt+', corrupted) — you resell it. Controlled by "Failed-corruption resale".'},
-    {grp:corrupt, label:'Vaal EV', ev:['evVaal','winVaal','pV','invVaal','prize'], sk:'vaalEV',
+    {id:'vaalEV', grp:corrupt, label:'Vaal EV', ev:['evVaal','winVaal','pV','invVaal','prize'], sk:'vaalEV',
       info:'Average profit per Vaal Orb. The % chance hits the Prize; the rest resell at Fail value. Cost = EV base'+(qa?' + GCP for quality':'')+' + 1 Vaal. Sub-line: hit chance · expected net spend to make one +1 (hover the cell for the full breakdown).'},
-    {grp:corrupt, label:'Vaal ÷ time', signed:'adjVaal', sk:'adjVaal', when:'adj',
+    {id:'adjVaal', grp:corrupt, label:'Vaal ÷ time', signed:'adjVaal', sk:'adjVaal', when:'adj',
       info:'Vaal EV ÷ the gem’s leveling grind — corruption profit per unit of leveling time (most accurate when you self-level, EV base = Buy-in). Hidden on the Normal tab (grind 1×, so it equals Vaal EV).'},
-    {grp:corrupt, label:'Double EV', ev:['evDbl','winDbl','pD','invDbl','prize'], sk:'dblEV',
+    {id:'dblEV', grp:corrupt, label:'Double EV', ev:['evDbl','winDbl','pD','invDbl','prize'], sk:'dblEV',
       info:'Average profit per Temple double-corrupt — higher hit chance, and its own cost (both editable in Assumptions). Sub-line: hit chance · expected net spend per +1.'},
-    {grp:corrupt, label:'Double ÷ time', signed:'adjDbl', sk:'adjDbl', when:'adj',
+    {id:'adjDbl', grp:corrupt, label:'Double ÷ time', signed:'adjDbl', sk:'adjDbl', when:'adj',
       info:'Double EV ÷ the gem’s leveling grind — double-corrupt profit per unit of leveling time. Hidden on the Normal tab (grind 1×, so it equals Double EV).'},
-    {grp:'', label:'Listings', plainLiq:true, sk:'liquidity',
+    {id:'liq', grp:'', label:'Listings', plainLiq:true, sk:'liquidity',
       info:'poe.ninja listing count — higher = more reliable price, easier to buy & sell.'},
   ];
   return cols.filter(c => {
-    if(c.when==='adj') return showAdj;   // Time-adj columns: hidden on Normal (1× baseline)
-    if(c.when==='q23') return qa;         // 21/23 double-corrupt: quality tabs only
+    if(c.when==='adj' && !showAdj) return false;   // Time-adj columns: hidden on Normal (1× baseline)
+    if(c.when==='q23' && !qa) return false;         // 21/23 double-corrupt: quality tabs only
+    if(c.id && !colVisible(c.id)) return false;     // user column-visibility toggles
     return true;
   });
 }
@@ -323,6 +356,12 @@ function sortValue(g, m, key){
   }
 }
 const infoIcon = (t)=> `<span class="ci" title="${t.replace(/"/g,'&quot;')}">&#9432;</span>`;
+function plusLevelFor(gems){   // most common (maxLvl+1) among a category's gems, for level-aware labels
+  if(!gems.length) return 21;
+  const counts={};
+  for(const g of gems) counts[g.maxLvl+1] = (counts[g.maxLvl+1]||0)+1;
+  return +Object.entries(counts).sort((a,b)=>b[1]-a[1])[0][0];
+}
 function xpShort(n){
   if(n>=1e9) return (n/1e9).toFixed(2).replace(/\.?0+$/,'')+'B';
   if(n>=1e6) return Math.round(n/1e6)+'M';
@@ -365,7 +404,8 @@ function renderTable(){
 
   const tbl=$('tbl');
   const mode = CAT === 'meta' ? 'meta' : 'quality';
-  const cols = buildCols(mode, CAT!=='normal');   // hide Time-adj. profit on the baseline Normal tab
+  const plus = plusLevelFor(GEMS.filter(g=>g.cat===CAT));   // +1 level for labels (21 normal, 4 exceptional)
+  const cols = buildCols(mode, CAT!=='normal', plus);   // hide Time-adj. profit on the baseline Normal tab
 
   // header: group row + column row
   let grpRow='<tr>', colRow='<tr>';
@@ -405,9 +445,8 @@ function renderTable(){
     });
   }
 
-  const showAll=$('showAll').checked;
-  const shown = showAll ? rows : rows.slice(0,100);
-  $('rowCount').textContent = `${shown.length} of ${rows.length} ${CAT_LABEL[CAT]} gems`;
+  const shown = rows;
+  $('rowCount').textContent = `${rows.length} ${CAT_LABEL[CAT]} gems`;
 
   // body
   let body='';
@@ -579,10 +618,29 @@ function updateFreshness(){
 }
 
 // ---------- URLs ----------
-function apiBase(){ return `https://poe.ninja/${$('game').value}/api/economy/stash/current`; }
+function apiBase(){ return `https://poe.ninja/${GAME}/api/economy/stash/current`; }
 function gemsUrl(){ return `${apiBase()}/item/overview?league=${encodeURIComponent($('league').value)}&type=SkillGem`; }
 function currUrl(){ return `${apiBase()}/currency/overview?league=${encodeURIComponent($('league').value)}&type=Currency`; }
 function refreshLinks(){ $('lnkGems').href=gemsUrl(); $('lnkCurr').href=currUrl(); }
+
+// ---------- league dropdown ----------
+function ensureLeagueOption(name){
+  if(!name) return;
+  const sel=$('league');
+  if(![...sel.options].some(o=>o.value===name)){
+    const o=document.createElement('option'); o.value=name; o.textContent=name; sel.appendChild(o);
+  }
+}
+async function populateLeagues(){
+  const sel=$('league'); if(!sel) return;
+  let leagues=['Standard','Hardcore'];
+  try{ const r=await fetch('json/leagues.json',{cache:'no-store'}); if(r.ok){ const j=await r.json(); if(Array.isArray(j)&&j.length) leagues=j; } }catch{}
+  sel.innerHTML='';
+  for(const name of leagues){ const o=document.createElement('option'); o.value=name; o.textContent=name; sel.appendChild(o); }
+  const saved=(load(LS.settings,{})||{}).league;
+  if(saved){ ensureLeagueOption(saved); sel.value=saved; }
+  refreshLinks();
+}
 
 async function fetchLive(){
   setStatus('Attempting live fetch…');
@@ -590,7 +648,7 @@ async function fetchLive(){
     const [gr,cr]=await Promise.all([fetch(gemsUrl()), fetch(currUrl()).catch(()=>null)]);
     const gj=await gr.json();
     const cj=cr?await cr.json().catch(()=>null):null;
-    ingest(gj,cj,{league:$('league').value,game:$('game').value});
+    ingest(gj,cj,{league:$('league').value,game:GAME});
     $('loader').classList.add('hidden');
   }catch(err){
     setStatus('Live fetch failed (CORS-blocked, as expected for a local file). Use the manual links / paste below.','err');
@@ -605,7 +663,7 @@ async function loadFromServer(forceRefresh){
   try{
     if(forceRefresh){
       setStatus('Downloading fresh prices from poe.ninja…');
-      const r = await fetch(`/api/refresh?game=${$('game').value}&league=${encodeURIComponent($('league').value)}`);
+      const r = await fetch(`/api/refresh?game=${GAME}&league=${encodeURIComponent($('league').value)}`);
       const info = await r.json();
       if(!info.ok) throw new Error(info.error || 'download failed');
     }
@@ -617,7 +675,7 @@ async function loadFromServer(forceRefresh){
     const gj = await gr.json();
     let cj = null;
     try{ const cr = await fetch('json/currency.json', {cache:'no-store'}); if(cr.ok) cj = await cr.json(); }catch{}
-    let meta = {league:$('league').value, game:$('game').value};
+    let meta = {league:$('league').value, game:GAME};
     try{ const mr = await fetch('json/meta.json', {cache:'no-store'}); if(mr.ok){ const m = await mr.json(); if(m.when) meta.when=m.when; } }catch{}
     ingest(gj, cj, meta);
     $('loader').classList.add('hidden');
@@ -638,10 +696,10 @@ async function loadStaticData(){
     const gj = await gr.json();
     let cj = null;
     try{ const cr = await fetch('json/currency.json', {cache:'no-store'}); if(cr.ok) cj = await cr.json(); }catch{}
-    let meta = {league:$('league').value, game:$('game').value};
+    let meta = {league:$('league').value, game:GAME};
     try{
       const mr = await fetch('json/meta.json', {cache:'no-store'});
-      if(mr.ok){ const m = await mr.json(); if(m.league){ meta.league=m.league; $('league').value=m.league; } if(m.game){ meta.game=m.game; $('game').value=m.game; } if(m.when){ meta.when=m.when; } }
+      if(mr.ok){ const m = await mr.json(); if(m.league){ meta.league=m.league; ensureLeagueOption(m.league); $('league').value=m.league; } if(m.when){ meta.when=m.when; } }
     }catch{}
     ingest(gj, cj, meta);
     $('loader').classList.add('hidden');
@@ -666,7 +724,7 @@ async function applyPaste(){
     if(!gTxt) throw new Error('Provide the Skill Gems JSON (paste or file).');
     const gj=JSON.parse(gTxt);
     const cj=cTxt?JSON.parse(cTxt):null;
-    ingest(gj,cj,{league:$('league').value,game:$('game').value});
+    ingest(gj,cj,{league:$('league').value,game:GAME});
     $('loader').classList.add('hidden');
   }catch(err){ setStatus('Could not parse JSON: '+err.message,'err'); }
 }
@@ -692,6 +750,8 @@ function setupAutoRefresh(){
 // ---------- boot ----------
 function boot(){
   restoreSettings();
+  buildColToggles();
+  populateLeagues();
   refreshLinks();
 
   // events
@@ -718,9 +778,9 @@ function boot(){
     document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
     t.classList.add('active'); CAT=t.dataset.cat; renderTable();
   });
-  ['game','league'].forEach(id=> $(id).addEventListener('input', ()=>{ refreshLinks(); saveSettings(); }));
+  $('league').addEventListener('input', ()=>{ refreshLinks(); saveSettings(); });
   ASSUME_IDS.forEach(id=> $(id).addEventListener('input', ()=>{ saveSettings(); updateDblWarn(); if(GEMS.length) renderTable(); }));
-  ['unit','minList','showAll','search','metaQuality','metaQualityCost'].forEach(id=>
+  ['unit','minList','search','metaQuality','metaQualityCost'].forEach(id=>
     $(id).addEventListener('input', ()=>{ saveSettings(); if(GEMS.length) renderTable(); }));
   // search clear (×)
   $('search').addEventListener('input', syncSearchClear);

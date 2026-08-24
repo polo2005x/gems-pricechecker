@@ -18,17 +18,14 @@ async function getJson(url){
   return r.json();
 }
 
-async function currentLeague(){
-  const idx = await getJson(`https://poe.ninja/${game}/api/data/index-state`);
-  const leagues = idx.economyLeagues || [];
-  // the current softcore challenge league = first that isn't Standard / any Hardcore
-  const pick = leagues.find(l => !/standard|hardcore/i.test(l.name)) || leagues[0];
-  if(!pick) throw new Error('could not determine current league');
-  return pick.name;
-}
-
 (async () => {
-  const league = process.env.LEAGUE || await currentLeague();
+  // index-state gives the current league + the full league list (for the dropdown)
+  const idx = await getJson(`https://poe.ninja/${game}/api/data/index-state`);
+  const eco = idx.economyLeagues || [];
+  const leagueNames = eco.map(l => l.name).filter(Boolean);
+  // current softcore challenge league = first that isn't Standard / any Hardcore
+  const league = process.env.LEAGUE || (eco.find(l => !/standard|hardcore/i.test(l.name)) || eco[0] || {}).name;
+  if(!league) throw new Error('could not determine current league');
   const base = `https://poe.ninja/${game}/api/economy/stash/current`;
 
   const gems = await getJson(`${base}/item/overview?league=${encodeURIComponent(league)}&type=SkillGem`);
@@ -53,6 +50,7 @@ async function currentLeague(){
     fs.writeFileSync(path.join(outDir, 'currency.json'), JSON.stringify(slimCurr));
   }
   fs.writeFileSync(path.join(outDir, 'meta.json'), JSON.stringify({ league, game, when: Date.now() }));
+  if(leagueNames.length) fs.writeFileSync(path.join(outDir, 'leagues.json'), JSON.stringify(leagueNames));
 
   console.log(`wrote ${slimGems.lines.length} gems for ${league} (${game}) to ${outDir}`);
 })().catch(e => { console.error('FAIL', e.message); process.exit(1); });

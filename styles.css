@@ -46,6 +46,9 @@ label{display:inline-flex; align-items:center; gap:6px}
 .modal-panel .assume-grid{margin-top:6px}
 .modal-panel p{margin:8px 0}
 .modal-actions{display:flex; gap:8px; justify-content:flex-end; margin-top:16px}
+.modal-sub{font-size:14px; margin:16px 0 6px; color:var(--accent)}
+.col-toggles{display:grid; grid-template-columns:repeat(auto-fill,minmax(190px,1fr)); gap:4px 14px}
+.col-toggles .chk{font-size:13px; gap:6px}
 .panel-head{display:flex; justify-content:space-between; align-items:center; margin-bottom:8px}
 .x{background:none;border:none;font-size:20px;line-height:1;color:var(--muted);padding:0 6px}
 .steps{margin:6px 0 0; padding-left:20px}
