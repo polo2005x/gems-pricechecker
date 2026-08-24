@@ -81,13 +81,14 @@
   </ol>
 </section>
 
-<!-- ============ ASSUMPTIONS ============ -->
-<section id="assumptions" class="panel">
-  <div class="panel-head">
-    <h2>Assumptions &amp; corruption odds <span class="muted">(editable — everything recalculates)</span></h2>
-    <button class="collapse" data-collapse="assumeBody">Hide</button>
-  </div>
-  <div id="assumeBody" class="assume-grid">
+<!-- ============ ASSUMPTIONS (modal) ============ -->
+<div id="settingsModal" class="modal hidden">
+  <div class="modal-panel">
+    <div class="panel-head">
+      <h2>Assumptions &amp; corruption odds <span class="muted">(editable — everything recalculates)</span></h2>
+      <button class="x" data-close="settingsModal" aria-label="Close">&times;</button>
+    </div>
+    <div class="assume-grid">
     <label>Divine = <input id="divRate" type="number" step="0.1" value="189.4" /> chaos <span class="src" id="srcDiv"></span></label>
     <label>Gemcutter's Prism <input id="gcpCost" type="number" step="0.1" value="2" /> chaos <span class="src" id="srcGcp"></span></label>
     <label>Vaal Orb <input id="vaalCost" type="number" step="0.1" value="1" /> chaos <span class="src" id="srcVaal"></span></label>
@@ -117,8 +118,27 @@
         <option value="buy">= your buy-in cost</option>
       </select>
     </label>
+    </div>
   </div>
-</section>
+</div>
+
+<!-- ============ TEMPLE-COST PROMPT (one-time) ============ -->
+<div id="templePrompt" class="modal hidden">
+  <div class="modal-panel small">
+    <div class="panel-head">
+      <h2>Set your double-corrupt cost</h2>
+      <button class="x" id="templeSkipX" aria-label="Close">&times;</button>
+    </div>
+    <p class="muted">A Temple double corrupt (Locus of Corruption) isn't free — it costs currency to run.
+      Enter what it costs you so the <b>Double EV</b> columns aren't over-optimistic. You can change it
+      anytime in <b>⚙ Settings</b>.</p>
+    <label>Double-corrupt cost <input id="templeInput" type="number" step="1" min="0" value="0" /> chaos</label>
+    <div class="modal-actions">
+      <button id="templeSkip">Skip for now</button>
+      <button id="templeSave" class="primary">Save</button>
+    </div>
+  </div>
+</div>
 
 <!-- ============ CONTROLS ============ -->
 <section class="controls">
@@ -160,6 +180,7 @@
     </label>
   </span>
   <span class="spacer"></span>
+  <button id="settingsBtn" title="Assumptions &amp; corruption odds">&#9881; Settings</button>
   <span id="rowCount" class="muted"></span>
 </section>
 

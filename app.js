@@ -137,6 +137,7 @@ function buildGems(lines){
         L20: at(maxLvl,20,false),     // leveled, 20 quality
         P0:  at(maxLvl+1,0,true),     // corrupted +1 level, 0 quality (the "prize")
         P20: at(maxLvl+1,20,true),    // corrupted +1 level, 20 quality
+        P23: at(maxLvl+1,23,true),    // corrupted +1 level, 23 quality (double-corrupt jackpot)
         F0:  at(maxLvl,0,true),       // corrupted same level, 0q (fail/brick resale)
         F20: at(maxLvl,20,true),      // corrupted same level, 20q
       },
@@ -194,6 +195,7 @@ function computeMetrics(g, a, mode){
   }
   m.leveled=leveled; m.leveledField=leveledField;
   m.prize=prize; m.prizeField=prizeField;
+  m.p23 = val(g,'P23'); m.p23Field='P23';   // double-corrupt jackpot (+1 level / 23q)
 
   const failVal=(proxy, basis)=>{
     if(a.failModel==='zero') return 0;
@@ -281,6 +283,8 @@ function buildCols(mode, showAdj){
       info:'Level profit ÷ the gem’s grind multiple (XP-to-max vs a normal gem) — profit per unit of leveling time. A gem that takes 7× as long has its leveling profit divided by 7, so slow gems compare fairly against fast ones. Hidden on the Normal tab (normal gems are the 1× baseline, so it equals Level profit). Empower-tier uses your Leveling-quality bracket.'},
     {grp:corrupt, label:'Prize', price:'prize', ovr:'prizeField', sk:'prize', divider:true,
       info:'The jackpot: market price of the corrupted +1-level'+qtxt+' gem.'},
+    {grp:corrupt, label:'21/23 (dbl)', price:'p23', ovr:'p23Field', sk:'p23', when:'q23',
+      info:'poe.ninja price of the double-corrupt jackpot: +1 level AND 23% quality, corrupted — the best a double corrupt can roll. Only a fraction of double corrupts hit both; this is the ceiling value, worth checking on the trade site.'},
     {grp:corrupt, label:'Fail value', plainMetric:'fail',
       info:'What you keep if the corruption does NOT add a level (same level'+qtxt+', corrupted) — you resell it. Controlled by "Failed-corruption resale".'},
     {grp:corrupt, label:'Vaal EV', ev:['evVaal','winVaal','pV','invVaal','prize'], sk:'vaalEV',
@@ -294,7 +298,11 @@ function buildCols(mode, showAdj){
     {grp:'', label:'Listings', plainLiq:true, sk:'liquidity',
       info:'poe.ninja listing count — higher = more reliable price, easier to buy & sell.'},
   ];
-  return cols.filter(c => c.when!=='adj' || showAdj);
+  return cols.filter(c => {
+    if(c.when==='adj') return showAdj;   // Time-adj columns: hidden on Normal (1× baseline)
+    if(c.when==='q23') return qa;         // 21/23 double-corrupt: quality tabs only
+    return true;
+  });
 }
 function sortValue(g, m, key){
   switch(key){
@@ -304,6 +312,7 @@ function sortValue(g, m, key){
     case 'adjProfit':   return m.adjProfit;
     case 'xp':          return g.xpEst;
     case 'prize':       return m.prize;
+    case 'p23':         return m.p23;
     case 'vaalEV':      return m.evVaal;
     case 'adjVaal':     return m.adjVaal;
     case 'dblEV':       return m.evDbl;
@@ -687,10 +696,18 @@ function boot(){
   $('fetchLive').onclick=fetchLive;
   $('applyPaste').onclick=applyPaste;
   document.querySelectorAll('[data-close]').forEach(b=> b.onclick=()=>$(b.dataset.close).classList.add('hidden'));
-  document.querySelector('[data-collapse]').onclick=(e)=>{
-    const el=$(e.target.dataset.collapse); el.classList.toggle('hidden');
-    e.target.textContent = el.classList.contains('hidden')?'Show':'Hide';
+  // settings modal: gear opens it; click backdrop or Esc closes any modal
+  $('settingsBtn').onclick=()=>$('settingsModal').classList.remove('hidden');
+  document.querySelectorAll('.modal').forEach(m=> m.addEventListener('click', e=>{ if(e.target===m) m.classList.add('hidden'); }));
+  document.addEventListener('keydown', e=>{ if(e.key==='Escape') document.querySelectorAll('.modal:not(.hidden)').forEach(m=>m.classList.add('hidden')); });
+  // one-time double-corrupt cost prompt
+  $('templeSave').onclick=()=>{
+    $('dblCost').value = +$('templeInput').value || 0;
+    updateDblWarn(); saveSettings(); if(GEMS.length) renderTable();
+    localStorage.setItem('gpc_temple_prompted','1'); $('templePrompt').classList.add('hidden');
   };
+  const skipTemple=()=>{ localStorage.setItem('gpc_temple_prompted','1'); $('templePrompt').classList.add('hidden'); };
+  $('templeSkip').onclick=skipTemple; $('templeSkipX').onclick=skipTemple;
   $('tbl').addEventListener('dblclick', onCellDblClick);
   $('tbl').addEventListener('click', onHeaderClick);
   $('dash').addEventListener('click', onDashClick);
@@ -721,6 +738,12 @@ function boot(){
   // restore sort from saved settings, then sync UI
   SORT.key = $('sort').value || 'vaalEV';
   updateDblWarn();
+
+  // one-time prompt to set the double-corrupt cost (it has no sensible default)
+  if((+$('dblCost').value||0)<=0 && !localStorage.getItem('gpc_temple_prompted')){
+    $('templeInput').value = $('dblCost').value || '';
+    $('templePrompt').classList.remove('hidden');
+  }
 
   initData();
 }
