@@ -112,6 +112,8 @@ function buildGems(lines){
     const maxLvl =Math.max(...unc.map(r=>r.pv.lvl));
     if(maxLvl<=baseLvl) continue;                // nothing to level
     const at=(lvl,q,c)=>{ const r=g.map[`${lvl}/${q}/${c?1:0}`]; return r?r.chaos:null; };
+    const atL=(lvl,q,c)=>{ const r=g.map[`${lvl}/${q}/${c?1:0}`]; return r?r.list:null; };
+    const buyL = at(baseLvl,0,false)!=null ? atL(baseLvl,0,false) : atL(baseLvl,20,false);  // match raw.buy's tier
     // pick the highest uncorrupted quality available at maxLvl (usually 20; awakened exc. may be 0/20)
     const qsAtMax = unc.filter(r=>r.pv.lvl===maxLvl).map(r=>r.pv.q);
     const topQ = Math.max(0,...qsAtMax);         // 20 for normal gems, 0 for exceptional
@@ -132,6 +134,12 @@ function buildGems(lines){
         P23: at(maxLvl+1,23,true),    // corrupted +1 level, 23 quality (double-corrupt jackpot)
         F0:  at(maxLvl,0,true),       // corrupted same level, 0q (fail/brick resale)
         F20: at(maxLvl,20,true),      // corrupted same level, 20q
+      },
+      // poe.ninja listing count backing each price → confidence indicator
+      rawList:{
+        buy: buyL,
+        L0:  atL(maxLvl,0,false),   L20: atL(maxLvl,20,false),
+        P0:  atL(maxLvl+1,0,true),  P20: atL(maxLvl+1,20,true), P23: atL(maxLvl+1,23,true),
       },
     });
   }
@@ -188,6 +196,12 @@ function computeMetrics(g, a, mode){
   m.leveled=leveled; m.leveledField=leveledField;
   m.prize=prize; m.prizeField=prizeField;
   m.p23 = val(g,'P23'); m.p23Field='P23';   // double-corrupt jackpot (+1 level / 23q)
+  // listing counts (confidence) for the displayed price cells
+  const RL = g.rawList || {};
+  m.buyList = RL.buy;
+  m.leveledList = RL[leveledField];
+  m.prizeList = RL[prizeField];
+  m.p23List = RL.P23;
 
   const failVal=(proxy, basis)=>{
     if(a.failModel==='zero') return 0;
@@ -354,6 +368,12 @@ function plusLevelFor(gems){   // most common (maxLvl+1) among a category's gems
   for(const g of gems) counts[g.maxLvl+1] = (counts[g.maxLvl+1]||0)+1;
   return +Object.entries(counts).sort((a,b)=>b[1]-a[1])[0][0];
 }
+// poe.ninja-style confidence dot from listing count — only shown on thin (low/medium) prices
+function confDot(count, overridden){
+  if(overridden || count==null || count>10) return '';
+  const low = count<=3;
+  return `<span class="cf ${low?'cf-low':'cf-med'}" title="${count} listing${count===1?'':'s'} — ${low?'low':'medium'} confidence price">&#9679;</span>`;
+}
 function xpShort(n){
   if(n>=1e9) return (n/1e9).toFixed(2).replace(/\.?0+$/,'')+'B';
   if(n>=1e6) return Math.round(n/1e6)+'M';
@@ -466,7 +486,7 @@ function renderTable(){
         const field = m[c.ovr];
         const has = field && OVER[`${g.id}::${field}`]!=null;
         tds+=`<td class="ovr-cell${has?' has-ovr':''}${dv}" data-id="${g.id}" data-field="${field}" `+
-             `title="double-click to set a manual override">${fmt(m[c.price])}${tradeIcon(g, field)}</td>`;
+             `title="double-click to set a manual override">${fmt(m[c.price])}${confDot(m[c.price+'List'], has)}${tradeIcon(g, field)}</td>`;
       } else if(c.signed){
         tds+=`<td class="${dv.trim()}">${fmtSigned(m[c.signed])}</td>`;
       } else if(c.ev){
