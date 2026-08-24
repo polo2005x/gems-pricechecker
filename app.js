@@ -350,7 +350,7 @@ function buildCols(mode, showAdj, plus){
     {id:'p23', grp:corrupt, label:p23lbl, price:'p23', ovr:'p23Field', sk:'p23', when:'q23',
       info:'poe.ninja price of the double-corrupt jackpot: +1 level AND 23% quality, corrupted — the best a double corrupt can roll. Only a fraction of double corrupts hit both; this is the ceiling value, worth checking on the trade site. (Off by default — enable in ⚙ Settings → Columns.)'},
     {id:'p23', tradeFor:'p23', grp:corrupt, when:'q23', label:''},
-    {id:'p20disp', grp:corrupt, label:'Vaal '+p20lbl, plainMetric:'vaalPrize', sk:'vaalPrize', when:'q23',
+    {id:'p20disp', grp:corrupt, label:'Vaal '+p20lbl, plainMetric:'vaalPrize', sk:'vaalPrize', when:'vaal',
       info:'Price of the gem’s VAAL counterpart at +1 level / 20% quality (e.g. Vaal Blade Vortex, not Blade Vortex). Turning into the Vaal version is a possible corruption outcome, so a Vaal 21/20 usually needs a double corrupt. Display-only (never affects EV) but sortable. Blank if the gem has no Vaal version. Off by default — enable in ⚙ Settings → Columns.'},
     {id:'fail', grp:corrupt, label:'Fail value', plainMetric:'fail',
       info:'What you keep if the corruption does NOT add a level (same level'+qtxt+', corrupted) — you resell it. Controlled by "Failed-corruption resale".'},
@@ -368,6 +368,7 @@ function buildCols(mode, showAdj, plus){
   return cols.filter(c => {
     if(c.when==='adj' && !showAdj) return false;   // Time-adj columns: hidden on Normal (1× baseline)
     if(c.when==='q23' && !qa) return false;         // 21/23 double-corrupt: quality tabs only
+    if(c.when==='vaal' && (CAT==='exceptional'||CAT==='meta')) return false;  // Vaal column: support tabs have no Vaal gems
     if(c.id && !colVisible(c.id)) return false;     // user column-visibility toggles
     return true;
   });
