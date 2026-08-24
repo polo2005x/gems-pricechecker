@@ -685,7 +685,7 @@ function setStatus(msg, cls){ const s=$('status'); s.innerHTML=msg; s.className=
 // ---------- data freshness / next-update countdown ----------
 let META_INFO = null;         // last-loaded {league, game, when}
 let IS_STATIC_HOST = false;   // true on GitHub Pages (data on a fixed schedule)
-const UPDATE_MINUTES = [10, 40];  // MUST match cron in .github/workflows/deploy-pages.yml
+const UPDATE_MINUTES = [7, 22, 37, 52];  // MUST match cron in .github/workflows/deploy-pages.yml
 function fmtDur(ms){
   const m = Math.max(0, Math.round(ms/60000));
   return m<60 ? m+'m' : Math.floor(m/60)+'h '+(m%60)+'m';

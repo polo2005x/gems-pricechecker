@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]          # redeploy when the code changes
   schedule:
-    - cron: '10,40 * * * *'   # refresh poe.ninja prices every 30 min (at :10 and :40)
+    - cron: '7,22,37,52 * * * *'   # refresh ~every 15 min at off-peak minutes (GitHub cron is best-effort; over-schedule so delays/drops hurt less)
   workflow_dispatch:           # allow manual runs
 
 permissions:
