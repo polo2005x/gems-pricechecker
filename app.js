@@ -203,15 +203,14 @@ function computeMetrics(g, a, mode){
     base = (a.evBase==='leveled')
       ? (L20 ?? (L0!=null ? L0+gq : null))    // buy a leveled 20q gem (or a 0q one + GCP)
       : (buy!=null ? buy+gq : null);          // buy L1 + GCP to 20q
-    if(a.levelQ20 && L20!=null){
-      // "level to 20% quality": show the 20/20 leveled price and charge GCP in the profit
+    if(a.levelQ20){
+      // ON: max level / 20% quality (20/20, or 3/20 for exceptional). Charge GCP in the profit.
       leveled = L20; leveledField = 'L20';
-      m.levelProfit = (buy!=null) ? L20 - buy - gq : null;
+      m.levelProfit = (L20!=null && buy!=null) ? L20 - buy - gq : null;
     } else {
-      // pure level-only flip: 0q leveled if it trades, else the 20q price (then subtract GCP)
-      leveled = L0 ?? L20; leveledField = L0!=null ? 'L0':'L20';
-      m.levelProfit = (leveled!=null && buy!=null)
-        ? (L0!=null ? leveled-buy : leveled-buy-gq) : null;
+      // OFF: max level / 0% quality (20/0, or 3/0). Pure level-only flip, no GCP.
+      leveled = L0; leveledField = 'L0';
+      m.levelProfit = (L0!=null && buy!=null) ? L0 - buy : null;
     }
   }
   m.leveled=leveled; m.leveledField=leveledField;
@@ -741,7 +740,7 @@ function tradeUrl(g, level, quality, corrupted){
   const t = TRADEMAP[g.name];
   const type = t ? (t.d ? {option:t.t, discriminator:t.d} : t.t) : g.name;   // fallback: plain name
   const filters = { gem_level:{min:level}, corrupted:{option: corrupted?'true':'false'} };
-  if(quality>0) filters.quality = {min:quality};
+  filters.quality = quality>0 ? {min:quality} : {max:0};   // 0q cells search exactly 0 quality
   const q = { query:{ status:{option:'securable'}, type, filters:{misc_filters:{filters}} }, sort:{price:'asc'} };
   return `https://www.pathofexile.com/trade/search/${encodeURIComponent(league)}?q=${encodeURIComponent(JSON.stringify(q))}`;
 }
