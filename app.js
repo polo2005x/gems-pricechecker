@@ -1,7 +1,9 @@
 'use strict';
-/* PoE1 Gem Profit Checker
- * Data: poe.ninja economy (SkillGem + Currency overviews).
- * All money math is done in CHAOS, then converted for display. */
+/* PoE1 Profit Checker
+ * Data: poe.ninja economy (SkillGem + Currency + Scarab overviews).
+ * All money math is done in CHAOS, then converted for display.
+ * Two top-level views (MODE): 'gems' (leveling/corruption profit) and
+ * 'scarabs' (mechanic-grouped scarab values with rarity weighting). */
 
 // ---------- persistent state ----------
 const LS = {
@@ -15,6 +17,8 @@ let OVER = load(LS.overrides, {});   // { "<detailsId>::<field>": number }
 let CAT = 'top';
 const GAME = 'poe1';                  // this tool is PoE1-only
 let LEAGUE_SLUG = {};                 // league name -> poe.ninja slug (for per-league data files)
+let MODE = load('gpc_mode', 'gems');  // 'gems' | 'scarabs' — top-level view
+let SCARABS = null;                   // { divineRate, rows:[{id,name,image,chaos,volume}] } for current league
 
 // ---------- tiny helpers ----------
 const $ = (id) => document.getElementById(id);
@@ -461,6 +465,7 @@ function xpBadge(g, a){
 }
 
 function renderTable(){
+  if(MODE==='scarabs') return;   // scarab view owns the page; render() handles the switch
   const a=readAssume();
   $('metaControls').classList.toggle('hidden', CAT!=='meta');   // Empower-tier quality controls
   $('qualControls').classList.toggle('hidden', CAT==='meta');  // 20q toggle (quality tabs + Top picks)
@@ -686,7 +691,7 @@ function ingest(gemsJson, currJson, meta){
     save(LS.data,{g:slimG,c:slimC,meta:{...meta,when:Date.now()}});
   }catch(e){ /* too big for quota — fine */ }
   saveSettings();
-  renderTable();
+  render();
   META_INFO = meta || null;
   updateFreshness();
   updateTempleLinks();
@@ -824,6 +829,7 @@ async function loadFromServer(forceRefresh){
     try{ const cr = await fetch('json/currency.json', {cache:'no-store'}); if(cr.ok) cj = await cr.json(); }catch{}
     let meta = {league:$('league').value, game:GAME};
     try{ const mr = await fetch('json/meta.json', {cache:'no-store'}); if(mr.ok){ const m = await mr.json(); if(m.when) meta.when=m.when; } }catch{}
+    await loadScarabs(null);   // local serve.js writes slugless json/scarabs.json
     ingest(gj, cj, meta);
     $('loader').classList.add('hidden');
   }catch(e){
@@ -848,6 +854,7 @@ async function loadStaticData(leagueName){
     const gj = await gr.json();
     let cj = null;
     try{ const cr = await fetch(`json/currency-${slug}.json`, {cache:'no-store'}); if(cr.ok) cj = await cr.json(); }catch{}
+    await loadScarabs(slug);
     ingest(gj, cj, {league:name, game:meta.game||GAME, when:meta.when});
     $('loader').classList.add('hidden');
   }catch(e){
@@ -894,6 +901,232 @@ function setupAutoRefresh(){
   autoTimer = setInterval(()=>{ loadFromServer(true); }, mins*60*1000);
 }
 
+// ============================================================================
+//  SCARABS  (ported from the poe.ninja-scarab-groups userscript)
+//  Scarabs are bucketed by league mechanic; each group shows total / median /
+//  raw-avg / rarity-weighted-avg. Prices reuse the app's fmt() (unit + divRate).
+// ============================================================================
+
+// Scarab drop rarity, scraped once from poedb.tw. Rarity is a fixed game property,
+// so this static table stays valid across leagues. Unknown scarabs -> "common".
+const SCARAB_RARITY = {
+  "Abyss Scarab": "common", "Abyss Scarab of Crystals": "rare", "Abyss Scarab of Descending": "rare", "Abyss Scarab of Multitudes": "uncommon", "Abyss Scarab of the Consort": "mythic",
+  "Ambush Scarab": "common", "Ambush Scarab of Containment": "mythic", "Ambush Scarab of Discernment": "rare", "Ambush Scarab of Hidden Compartments": "uncommon", "Ambush Scarab of Potency": "uncommon",
+  "Anarchy Scarab": "common", "Anarchy Scarab of Gigantification": "uncommon", "Anarchy Scarab of Partnership": "rare", "Anarchy Scarab of the Exceptional": "rare",
+  "Bestiary Scarab": "common", "Bestiary Scarab of Duplicating": "rare", "Bestiary Scarab of the Herd": "uncommon",
+  "Betrayal Scarab": "common", "Betrayal Scarab of Reinforcements": "uncommon", "Betrayal Scarab of Unbreaking": "rare", "Betrayal Scarab of the Allflame": "uncommon",
+  "Beyond Scarab": "common", "Beyond Scarab of Haemophilia": "rare", "Beyond Scarab of Resurgence": "rare", "Beyond Scarab of the Invasion": "rare",
+  "Blight Scarab": "common", "Blight Scarab of Blooming": "mythic", "Blight Scarab of Invigoration": "mythic", "Blight Scarab of the Blightheart": "rare",
+  "Breach Scarab of Instability": "uncommon", "Breach Scarab of Resonant Cascade": "mythic", "Breach Scarab of the Hive": "common", "Breach Scarab of the Incensed Swarm": "mythic", "Breach Scarab of the Marshal": "rare",
+  "Cartography Scarab of Corruption": "rare", "Cartography Scarab of Escalation": "common", "Cartography Scarab of Risk": "mythic", "Cartography Scarab of the Multitude": "uncommon",
+  "Delirium Scarab": "common", "Delirium Scarab of Delusions": "rare", "Delirium Scarab of Mania": "uncommon", "Delirium Scarab of Neuroses": "rare", "Delirium Scarab of Paranoia": "uncommon",
+  "Divination Scarab of Pilfering": "rare", "Divination Scarab of Plenty": "rare", "Divination Scarab of The Cloister": "common",
+  "Domination Scarab": "common", "Domination Scarab of Apparitions": "uncommon", "Domination Scarab of Evolution": "rare", "Domination Scarab of Terrors": "mythic",
+  "Essence Scarab": "common", "Essence Scarab of Adaptation": "mythic", "Essence Scarab of Ascent": "rare", "Essence Scarab of Calcification": "mythic", "Essence Scarab of Stability": "uncommon",
+  "Expedition Scarab": "common", "Expedition Scarab of Archaeology": "rare", "Expedition Scarab of Infusion": "rare", "Expedition Scarab of Runefinding": "uncommon", "Expedition Scarab of Verisium Powder": "uncommon",
+  "Harvest Scarab": "common", "Harvest Scarab of Cornucopia": "mythic", "Harvest Scarab of Doubling": "rare",
+  "Horned Scarab of Awakening": "mythic", "Horned Scarab of Bloodlines": "extreme", "Horned Scarab of Glittering": "mythic", "Horned Scarab of Nemeses": "rare", "Horned Scarab of Pandemonium": "mythic", "Horned Scarab of Preservation": "extreme", "Horned Scarab of Tradition": "mythic",
+  "Incursion Scarab": "common", "Incursion Scarab of Champions": "rare", "Incursion Scarab of Invasion": "uncommon", "Incursion Scarab of Timelines": "mythic",
+  "Influencing Scarab of Hordes": "uncommon", "Influencing Scarab of Interference": "rare", "Influencing Scarab of the Elder": "common", "Influencing Scarab of the Shaper": "common",
+  "Kalguuran Scarab": "common", "Kalguuran Scarab of Enriching": "rare", "Kalguuran Scarab of Guarded Riches": "uncommon", "Kalguuran Scarab of Refinement": "mythic",
+  "Legion Scarab": "common", "Legion Scarab of Eternal Conflict": "mythic", "Legion Scarab of Officers": "rare", "Legion Scarab of Treasures": "rare",
+  "Ritual Scarab of Abundance": "rare", "Ritual Scarab of Corpses": "rare", "Ritual Scarab of Selectiveness": "common", "Ritual Scarab of Wisps": "uncommon",
+  "Scarab of Adversaries": "common", "Scarab of Divinity": "uncommon", "Scarab of Monstrous Lineage": "common", "Scarab of Radiant Storms": "mythic", "Scarab of Stability": "rare", "Scarab of Wisps": "rare", "Scarab of the Dextral": "rare", "Scarab of the Sinistral": "rare",
+  "Sulphite Scarab": "common", "Sulphite Scarab of Fumes": "rare",
+  "Titanic Scarab": "common", "Titanic Scarab of Legend": "mythic", "Titanic Scarab of Treasures": "rare",
+  "Torment Scarab": "common", "Torment Scarab of Peculiarity": "uncommon", "Torment Scarab of Possession": "rare",
+  "Trarthan Scarab": "common", "Trarthan Scarab of Infamy": "uncommon", "Trarthan Scarab of Renown": "rare", "Trarthan Scarab of Surprising Alliances": "mythic",
+  "Ultimatum Scarab": "common", "Ultimatum Scarab of Bribing": "uncommon", "Ultimatum Scarab of Catalysing": "extreme", "Ultimatum Scarab of Dueling": "mythic", "Ultimatum Scarab of Inscription": "rare",
+};
+// Default relative DROP FREQUENCY per rarity (common = 1 baseline). Calibrated from a
+// 3.27 sample of 33,333 drops (median drop rate per tier, normalized to common). Tunable.
+const SC_WEIGHT_DEF = { common: 1.0, uncommon: 0.68, rare: 0.34, mythic: 0.06, extreme: 0.04 };
+const SCARAB_RARITY_LIST = ['common', 'uncommon', 'rare', 'mythic', 'extreme'];
+const SCARAB_RARITY_COLOR = { common:'#8b929c', uncommon:'#5bbf6a', rare:'#4c9be8', mythic:'#b57ae0', extreme:'#e0a13b' };
+const SC_SORT_LABEL = { total:'Total', median:'Median', average:'Raw Avg', weighted:'Wtd Avg' };
+const SC_METRIC_DESC = {
+  total:'Total: sum of one of each scarab in this mechanic. Ranks mechanics by combined value.',
+  median:'Median: the middle scarab price, ignoring a single very expensive outlier.',
+  average:'Raw Avg: plain (unweighted) mean of every scarab price — no rarity weighting.',
+  weighted:'Wtd Avg: rarity-weighted expected value of a random drop — rarer scarabs count less (tune weights in ⚙ Settings).',
+  volume:'Volume: how much of these scarabs traded recently on poe.ninja.',
+};
+
+// scarab view state (sort / folds / hidden / weights), persisted under one key
+let SC = Object.assign({ sortKey:'total', sortDir:-1, folds:{}, hidden:{}, weights:{} }, load('gpc_scarab', {}) || {});
+SC.weights = Object.assign({}, SC_WEIGHT_DEF, SC.weights || {});
+function saveSC(){ save('gpc_scarab', SC); }
+
+function scMechanicOf(name){
+  if(/^Scarab of /i.test(name)) return 'Generic';
+  const m = name.match(/^(.+?)\s+Scarab\b/);
+  return m ? m[1] : 'Other';
+}
+function scRarityOf(name){ return SCARAB_RARITY[name] || 'common'; }
+function scWeightOf(r){ const w = SC.weights[r]; return (typeof w==='number' && w>=0) ? w : (SC_WEIGHT_DEF[r] || 1); }
+function medianOf(arr){
+  if(!arr.length) return 0;
+  const s = arr.slice().sort((a,b)=>a-b), mid = Math.floor(s.length/2);
+  return s.length % 2 ? s[mid] : (s[mid-1] + s[mid]) / 2;
+}
+function fmtVol(n){ n = n||0; return n>=1000 ? (n/1000).toFixed(n>=10000?0:1)+'k' : String(Math.round(n)); }
+
+// bucket rows by mechanic + compute total / median / average / weighted avg (uses current weights)
+function buildScarabGroups(rows){
+  const by = {};
+  rows.forEach(r=>{
+    const mechanic = scMechanicOf(r.name), rarity = scRarityOf(r.name);
+    (by[mechanic] || (by[mechanic] = [])).push({ ...r, mechanic, rarity });
+  });
+  const groups = Object.keys(by).map(mechanic=>{
+    const items = by[mechanic].slice().sort((a,b)=> SC.sortDir<0 ? b.chaos-a.chaos : a.chaos-b.chaos);
+    const prices = items.map(i=>i.chaos);
+    const total = prices.reduce((s,v)=>s+v,0);
+    let wsum=0, wval=0; items.forEach(i=>{ const w=scWeightOf(i.rarity); wsum+=w; wval+=i.chaos*w; });
+    return { mechanic, items, count:items.length, total,
+      average: prices.length ? total/prices.length : 0,
+      median: medianOf(prices),
+      weighted: wsum ? wval/wsum : 0,
+      volume: items.reduce((s,i)=>s+i.volume,0) };
+  });
+  const k = SC.sortKey;
+  groups.sort((a,b)=> SC.sortDir<0 ? b[k]-a[k] : a[k]-b[k]);
+  return groups;
+}
+
+function scMetric(key, label, chaos){
+  const active = SC.sortKey===key;
+  return `<div class="sc-metric${active?' active':''}" title="${SC_METRIC_DESC[key].replace(/"/g,'&quot;')}">`+
+         `<span class="lbl">${label}</span><b>${fmt(chaos)}</b></div>`;
+}
+function scRarBadge(r){
+  const c = SCARAB_RARITY_COLOR[r] || '#8b929c';
+  return `<span class="sc-rar" title="${r} — drop weight ${scWeightOf(r)} (edit in ⚙ Settings)" `+
+         `style="background:${c}22;color:${c};border:1px solid ${c}66">${r}</span>`;
+}
+
+function renderScarabs(){
+  const host = $('scarabs'); if(!host) return;
+  if(!SCARABS || !SCARABS.rows || !SCARABS.rows.length){
+    host.innerHTML = '<div class="sc-empty">No scarab data for this league yet. Try again shortly, or switch league.</div>';
+    $('scCount').textContent = '';
+    return;
+  }
+  const qstr = $('scSearch').value.trim().toLowerCase();
+  let groups = buildScarabGroups(SCARABS.rows);
+  if(qstr) groups = groups.filter(g=> g.mechanic.toLowerCase().includes(qstr) || g.items.some(i=>i.name.toLowerCase().includes(qstr)));
+
+  const hidden  = groups.filter(g=> SC.hidden[g.mechanic]);
+  const visible = groups.filter(g=> !SC.hidden[g.mechanic]);
+  $('scCount').textContent = `${SCARABS.rows.length} scarabs · ${visible.length}/${groups.length} mechanics`;
+
+  const hiddenBar = hidden.length
+    ? `<div class="sc-hiddenbar">Hidden (click to restore): ${hidden.map(g=>
+        `<button class="sc-chip" data-scunhide="${g.mechanic}" title="Unhide ${g.mechanic}">${g.mechanic} ✕</button>`).join('')}</div>`
+    : '';
+
+  if(!visible.length){ host.innerHTML = hiddenBar + '<div class="sc-empty">No mechanics match — clear the search or restore hidden groups.</div>'; return; }
+
+  host.innerHTML = hiddenBar + visible.map(g=>{
+    const open = !SC.folds[g.mechanic];
+    const rows = g.items.map(it=>`
+      <div class="sc-row">
+        <span>${it.image?`<img src="${it.image}" alt="" loading="lazy">`:''}</span>
+        <span class="sc-name">${it.name}</span>
+        <span>${scRarBadge(it.rarity)}</span>
+        <span class="sc-val" title="Raw market price (unweighted)">${fmt(it.chaos)}</span>
+        <span class="sc-val sc-dim" title="Weighted: raw × ${scWeightOf(it.rarity)} (${it.rarity} drop weight)">${fmt(it.chaos*scWeightOf(it.rarity))}</span>
+        <span class="sc-vol">${fmtVol(it.volume)}</span>
+      </div>`).join('');
+    return `
+      <div class="sc-group ${open?'open':''}">
+        <div class="sc-ghead" data-scfold="${g.mechanic}">
+          <div class="sc-gname">${open?'▾':'▸'} ${g.mechanic} <small>${g.count} scarab${g.count===1?'':'s'}</small>
+            <span class="sc-hide" data-schide="${g.mechanic}" title="Hide this group">✕</span></div>
+          ${scMetric('total','Total',g.total)}
+          ${scMetric('median','Median',g.median)}
+          ${scMetric('average','Raw Avg',g.average)}
+          ${scMetric('weighted','Wtd Avg',g.weighted)}
+          <div class="sc-metric" title="${SC_METRIC_DESC.volume}"><span class="lbl">Vol</span><b>${fmtVol(g.volume)}</b></div>
+        </div>
+        <div class="sc-colhdr"><span></span><span>Scarab</span><span>Rar</span>
+          <span class="r" title="Raw market price">Raw</span>
+          <span class="r" title="Raw × this scarab's rarity drop weight">Wtd</span>
+          <span class="r">Vol</span></div>
+        <div class="sc-rows">${rows}</div>
+      </div>`;
+  }).join('');
+}
+
+function syncScSort(){
+  document.querySelectorAll('[data-scsort]').forEach(b=>{
+    const k = b.dataset.scsort, on = SC.sortKey===k;
+    b.classList.toggle('active', on);
+    b.title = SC_METRIC_DESC[k] + ' (click the active button again to reverse)';
+    b.innerHTML = SC_SORT_LABEL[k] + (on ? (SC.sortDir<0 ? ' ▼' : ' ▲') : '');
+  });
+}
+function onScSortClick(e){
+  const b = e.target.closest('[data-scsort]'); if(!b) return;
+  const k = b.dataset.scsort;
+  if(SC.sortKey===k) SC.sortDir = -SC.sortDir; else { SC.sortKey = k; SC.sortDir = -1; }
+  saveSC(); syncScSort(); renderScarabs();
+}
+function onScGroupClick(e){
+  const hide   = e.target.closest('[data-schide]');
+  const unhide = e.target.closest('[data-scunhide]');
+  const fold   = e.target.closest('[data-scfold]');
+  if(hide){   e.stopPropagation(); SC.hidden[hide.dataset.schide] = true; saveSC(); renderScarabs(); return; }
+  if(unhide){ delete SC.hidden[unhide.dataset.scunhide]; saveSC(); renderScarabs(); return; }
+  if(fold){   const m = fold.dataset.scfold; SC.folds[m] = !SC.folds[m]; saveSC(); renderScarabs(); return; }
+}
+function scResetView(){ SC.sortKey='total'; SC.sortDir=-1; SC.folds={}; SC.hidden={}; saveSC(); syncScSort(); renderScarabs(); }
+
+function buildScarabWeights(){
+  const box = $('scWeights'); if(!box) return;
+  box.innerHTML = SCARAB_RARITY_LIST.map(r=>
+    `<label><span class="sc-wdot" style="background:${SCARAB_RARITY_COLOR[r]}"></span>${r}`+
+    `<input type="number" step="0.01" min="0" data-scw="${r}" value="${SC.weights[r]}"></label>`).join('');
+  box.querySelectorAll('[data-scw]').forEach(inp=> inp.oninput=()=>{
+    const r = inp.dataset.scw, v = parseFloat(inp.value);
+    SC.weights[r] = (isNaN(v) || v<0) ? 0 : v; saveSC();
+    if(MODE==='scarabs') renderScarabs();
+  });
+}
+
+// scarab data for a league. Static host (Pages): per-slug file. Local serve.js: slugless file.
+async function loadScarabs(slug){
+  const urls = slug ? [`json/scarabs-${slug}.json`, 'json/scarabs.json'] : ['json/scarabs.json'];
+  for(const u of urls){
+    try{ const r = await fetch(u, {cache:'no-store'}); if(r.ok){ SCARABS = await r.json(); return; } }catch{}
+  }
+  SCARABS = null;
+}
+
+// ---------- top-level view (MODE) ----------
+function applyMode(){
+  const sc = MODE==='scarabs';
+  document.querySelectorAll('.mode').forEach(b=> b.classList.toggle('active', b.dataset.mode===MODE));
+  document.querySelector('.controls').classList.toggle('hidden', sc);   // gem controls
+  document.querySelector('.tabs').classList.toggle('hidden', sc);       // gem tabs
+  const foot = document.querySelector('.foot'); if(foot) foot.classList.toggle('hidden', sc);
+  $('scarabControls').classList.toggle('hidden', !sc);
+  render();
+}
+// single re-render entry point that respects the active MODE
+function render(){
+  if(MODE==='scarabs'){
+    $('dash').classList.add('hidden');
+    document.querySelector('.tablewrap').classList.add('hidden');
+    $('scarabs').classList.remove('hidden');
+    syncScSort();
+    renderScarabs();
+  } else {
+    $('scarabs').classList.add('hidden');
+    renderTable();   // renderTable manages dash vs table itself
+  }
+}
+
 // ---------- boot ----------
 function boot(){
   restoreSettings();
@@ -927,14 +1160,31 @@ function boot(){
     document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
     t.classList.add('active'); CAT=t.dataset.cat; renderTable();
   });
+  // top-level Gems ⇄ Scarabs switch
+  document.querySelectorAll('.mode').forEach(b=> b.onclick=()=>{
+    MODE=b.dataset.mode; save('gpc_mode', MODE); applyMode();
+  });
+  // scarab controls: sort, reset, fold/hide, search, weights
+  buildScarabWeights();
+  document.querySelectorAll('[data-scsort]').forEach(b=> b.onclick=onScSortClick);
+  $('scReset').onclick = scResetView;
+  $('scarabs').addEventListener('click', onScGroupClick);
+  $('scSearch').addEventListener('input', ()=>{
+    $('scSearchClear').classList.toggle('hidden', !$('scSearch').value);
+    renderScarabs();
+  });
+  $('scSearchClear').onclick = ()=>{ $('scSearch').value=''; $('scSearchClear').classList.add('hidden'); renderScarabs(); $('scSearch').focus(); };
+  $('scWeightReset').onclick = ()=>{ SC.weights=Object.assign({},SC_WEIGHT_DEF); saveSC(); buildScarabWeights(); if(MODE==='scarabs') renderScarabs(); };
+  $('settingsBtn2').onclick = ()=>{ updateTempleLinks(); $('settingsModal').classList.remove('hidden'); };
   $('league').addEventListener('change', ()=>{
     refreshLinks(); updateTempleLinks(); saveSettings();
     if(IS_STATIC_HOST) loadStaticData($('league').value);   // static: swap to that league's deployed data
     else if(HAS_API) loadFromServer(true);                  // local server: re-fetch the selected league
   });
-  ASSUME_IDS.forEach(id=> $(id).addEventListener('input', ()=>{ saveSettings(); updateDblWarn(); if(GEMS.length) renderTable(); }));
+  const reRender = ()=>{ if(GEMS.length || MODE==='scarabs') render(); };   // divRate/unit also drive scarab prices
+  ASSUME_IDS.forEach(id=> $(id).addEventListener('input', ()=>{ saveSettings(); updateDblWarn(); reRender(); }));
   ['unit','minList','search','confFilter','metaQuality','metaQualityCost','levelQ20'].forEach(id=>
-    $(id).addEventListener('input', ()=>{ saveSettings(); if(GEMS.length) renderTable(); }));
+    $(id).addEventListener('input', ()=>{ saveSettings(); reRender(); }));
   // search clear (×)
   $('search').addEventListener('input', syncSearchClear);
   $('searchClear').onclick = ()=>{ $('search').value=''; $('search').dispatchEvent(new Event('input')); $('search').focus(); };
@@ -960,6 +1210,7 @@ function boot(){
     $('templePrompt').classList.remove('hidden');
   }
 
+  applyMode();   // show the saved top-level view (data load re-renders when it arrives)
   initData();
 }
 

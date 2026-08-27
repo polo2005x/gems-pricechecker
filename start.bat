@@ -1,5 +1,5 @@
 @echo off
-title PoE1 Gem Profit Checker
+title PoE1 Profit Checker
 cd /d "%~dp0"
 where node >nul 2>nul
 if errorlevel 1 (

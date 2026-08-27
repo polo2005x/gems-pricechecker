@@ -13,7 +13,7 @@ const outDir = process.argv[2] || path.join(__dirname, '..', 'json');
 const game   = process.argv[3] || 'poe1';
 
 async function getJson(url){
-  const r = await fetch(url, { headers: { 'user-agent': 'gems-pricechecker-bot' } });
+  const r = await fetch(url, { headers: { 'user-agent': 'poe1-profit-checker-bot' } });
   if(!r.ok) throw new Error(`${url} -> HTTP ${r.status}`);
   return r.json();
 }
@@ -28,6 +28,8 @@ const slim = (lines, keys) => ({ lines: lines.map(l => Object.fromEntries(keys.m
   const defaultSlug   = (eco.find(l => l.name === defaultLeague) || {}).url || (eco[0] || {}).url;
   if(!defaultLeague) throw new Error('could not determine leagues');
   const base = `https://poe.ninja/${game}/api/economy/stash/current`;
+  const exch = `https://poe.ninja/${game}/api/economy/exchange/current`;   // scarabs live on the bulk-exchange API
+  const IMG_HOST = 'https://web.poecdn.com';                               // scarab icons are on the CDN, not poe.ninja
   fs.mkdirSync(outDir, { recursive: true });
 
   // fetch each league so the dropdown can switch between them client-side on the static site
@@ -43,8 +45,26 @@ const slim = (lines, keys) => ({ lines: lines.map(l => Object.fromEntries(keys.m
         if(cur.lines) fs.writeFileSync(path.join(outDir, `currency-${l.url}.json`),
           JSON.stringify(slim(cur.lines, ['currencyTypeName','chaosEquivalent'])));
       } catch { /* currency optional */ }
+      // scarabs: bulk-exchange overview, joined with item meta for name/image. The app groups
+      // them by mechanic & applies rarity weights client-side, so we only ship the raw prices.
+      let scCount = 0;
+      try {
+        const sc = await getJson(`${exch}/overview?league=${encodeURIComponent(l.name)}&type=Scarab`);
+        const meta = {}; (sc.items || []).forEach(it => meta[it.id] = it);
+        const divineRate = (sc.core && sc.core.rates && sc.core.rates.divine) || 0;
+        const rows = (sc.lines || []).map(ln => {
+          const it = meta[ln.id] || {};
+          return { id: ln.id, name: it.name || ln.id,
+                   image: it.image ? IMG_HOST + it.image : null,
+                   chaos: ln.primaryValue || 0, volume: ln.volumePrimaryValue || 0 };
+        }).filter(r => r.chaos > 0);
+        if(rows.length){
+          fs.writeFileSync(path.join(outDir, `scarabs-${l.url}.json`), JSON.stringify({ divineRate, rows }));
+          scCount = rows.length;
+        }
+      } catch { /* scarabs optional */ }
       withData.push({ name:l.name, slug:l.url });
-      console.log(`  ${l.name}: ${gems.lines.length} gems`);
+      console.log(`  ${l.name}: ${gems.lines.length} gems${scCount ? `, ${scCount} scarabs` : ''}`);
     } catch(e){ console.warn(`  ${l.name}: failed — ${e.message}`); }
   }
   if(!withData.length) throw new Error('no league data fetched');

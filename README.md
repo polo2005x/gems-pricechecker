@@ -1,17 +1,21 @@
-# PoE1 Gem Profit Checker
+# PoE1 Profit Checker
 
-A single-page tool that pulls **Path of Exile 1** skill-gem prices from [poe.ninja](https://poe.ninja)
-and ranks gems by **profit to level** and **profit from corrupting** them.
+A single-page tool that pulls **Path of Exile 1** economy data from [poe.ninja](https://poe.ninja).
+Two views, switched with the **Gems ⇄ Scarabs** toggle at the top:
+
+- **Gems** — ranks skill gems by **profit to level** and **profit from corrupting** them.
+- **Scarabs** — groups scarabs by **league mechanic** with per-mechanic total / median / average /
+  **rarity-weighted** value, so you can see which mechanics are worth the most at a glance.
 
 No install, no build step — it's just `index.html` + `styles.css` + `app.js`.
 
 ## 🌐 Live version
 
-**<https://polo2005x.github.io/gems-pricechecker/>** — open it in any browser, nothing to install.
+**<https://polo2005x.github.io/poe1-profit-checker/>** — open it in any browser, nothing to install.
 Prices are auto-refreshed server-side (a GitHub Action re-fetches poe.ninja ~every 15 min, best-effort),
 so it just works and stays reasonably current. The **League** dropdown switches between all
-economy leagues (softcore, hardcore, Standard, …) — each is fetched and deployed, so switching
-loads that league's prices instantly. For on-demand fresh prices, run it locally with `start.bat`.
+economy leagues (softcore, hardcore, Standard, …) — each is fetched and deployed (gems **and** scarabs),
+so switching loads that league's data instantly. For on-demand fresh prices, run it locally with `start.bat`.
 
 ## How to run it (recommended — fully automatic)
 
@@ -88,6 +92,28 @@ name to see its exact range.
   - **charge 20% quality (GCP)** — adds the 20-GCP cost of quality-ing the gem to your leveling and corruption cost.
 
 Gems that only exist corrupted (Vaal skill gems) are excluded — you can't "level them yourself."
+
+## Scarabs
+
+Flip the top toggle to **Scarabs** for a second view built for scarab valuation. Every scarab from
+poe.ninja's bulk-exchange data is bucketed by its **league mechanic** (Legion, Delirium, Betrayal, …),
+and each mechanic group shows four metrics you can sort by:
+
+| Metric | Meaning |
+|---|---|
+| **Total** | Sum of one of each scarab in the mechanic — ranks mechanics by combined value. |
+| **Median** | The middle scarab price, ignoring a single very expensive outlier — the typical scarab's worth. |
+| **Raw Avg** | Plain (unweighted) mean of every scarab price. No rarity weighting. |
+| **Wtd Avg** | **Rarity-weighted** expected value of a *random* drop — rarer scarabs count less, because you see them less. The realistic "what's a drop from this mechanic worth" number. |
+
+Each scarab row shows its **rarity** (Common → Extreme, from poedb.tw — a fixed game property), its **Raw**
+price, its **Wtd** price (raw × that rarity's drop weight), and recent trade **Volume**. Fold a group by
+clicking its header, hide one with the **✕** (restore it from the bar that appears), and search by scarab or
+mechanic name. Prices honour the same **Currency** (Chaos / Divine) toggle as the Gems view.
+
+The per-rarity **drop weights** are editable in **⚙ Settings → Scarab rarity drop weights** (defaults are
+calibrated from a 3.27 drop sample); lowering a rarity's weight makes it count for less in every group's
+**Wtd Avg**, and the view re-scores instantly. Sort, folds, hidden groups, and weights are all saved in your browser.
 
 ### Corruption odds (why EV can be negative)
 

@@ -3,14 +3,14 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>PoE1 Gem Profit Checker</title>
+<title>PoE1 Profit Checker</title>
 <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
 <header class="topbar">
   <div class="brand">
-    <h1>PoE1 Gem Profit Checker</h1>
-    <span class="sub">poe.ninja economy &middot; level &amp; corruption profit</span>
+    <h1>PoE1 Profit Checker</h1>
+    <span class="sub">poe.ninja economy &middot; gems &amp; scarabs</span>
   </div>
   <div class="league-box">
     <label>League
@@ -118,8 +118,17 @@
     </label>
     </div>
 
-    <h3 class="modal-sub">Columns to show</h3>
+    <h3 class="modal-sub">Columns to show <span class="muted">(Gems)</span></h3>
     <div id="colToggles" class="col-toggles"></div>
+
+    <h3 class="modal-sub">Scarab rarity drop weights</h3>
+    <p class="muted" style="margin:6px 0 10px">
+      Relative drop frequency per rarity (common = 1). Rarer scarabs get a smaller weight so they
+      count less toward each mechanic's <b>Wtd Avg</b> (the rarity-weighted expected value of a random
+      drop). Raw prices are never changed. Edits apply instantly.
+    </p>
+    <div id="scWeights" class="assume-grid"></div>
+    <div style="margin-top:8px"><button id="scWeightReset">Reset weights to defaults</button></div>
 
     <p class="muted" style="margin-top:14px">
       Ignored gems: <b id="blkCount">0</b> — sent to the bottom &amp; greyed out.
@@ -149,7 +158,13 @@
   </div>
 </div>
 
-<!-- ============ CONTROLS ============ -->
+<!-- ============ MODE SWITCH (Gems ⇄ Scarabs) ============ -->
+<div class="modeswitch" role="tablist" aria-label="View">
+  <button class="mode active" data-mode="gems">Gems</button>
+  <button class="mode" data-mode="scarabs">Scarabs</button>
+</div>
+
+<!-- ============ CONTROLS (Gems mode) ============ -->
 <section class="controls">
   <span class="search-wrap">
     <input id="search" type="search" placeholder="Search gem name…" />
@@ -201,6 +216,25 @@
   <span id="rowCount" class="muted"></span>
 </section>
 
+<!-- ============ CONTROLS (Scarabs mode) ============ -->
+<section id="scarabControls" class="controls hidden">
+  <span class="search-wrap">
+    <input id="scSearch" type="search" placeholder="Search scarab / mechanic…" />
+    <button id="scSearchClear" type="button" class="search-clear hidden" aria-label="Clear search" title="Clear">&times;</button>
+  </span>
+  <span class="sc-sortbar">
+    <span class="sc-sortlbl">Sort</span>
+    <button class="sc-sort" data-scsort="total"></button>
+    <button class="sc-sort" data-scsort="median"></button>
+    <button class="sc-sort" data-scsort="average"></button>
+    <button class="sc-sort" data-scsort="weighted"></button>
+  </span>
+  <button id="scReset" title="Reset scarab sorting, folded &amp; hidden groups to defaults">&#8635; Reset</button>
+  <span class="spacer"></span>
+  <button id="settingsBtn2" title="Assumptions, rarity weights &amp; more">&#9881; Settings</button>
+  <span id="scCount" class="muted"></span>
+</section>
+
 <nav class="tabs">
   <button class="tab active" data-cat="top">★ Top picks</button>
   <button class="tab" data-cat="normal">Normal gems</button>
@@ -214,6 +248,7 @@
   <div class="tablewrap">
     <table id="tbl"></table>
   </div>
+  <div id="scarabs" class="hidden"></div>
 </main>
 
 <footer class="foot muted">
