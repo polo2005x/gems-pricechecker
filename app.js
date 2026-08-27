@@ -212,6 +212,13 @@ function computeMetrics(g, a, mode){
       leveled = L0; leveledField = 'L0';
       m.levelProfit = (L0!=null && buy!=null) ? L0 - buy : null;
     }
+    // sanity cap: a max-level UNcorrupted gem can't rationally beat the corrupted +1-level prize
+    // (you could just Vaal it for a shot at the pricier +1). Guards against poe.ninja outliers
+    // like a 2-listing 20/20 mispriced at 15,957c inflating the leveling profit.
+    if(prize!=null && leveled!=null && leveled>prize){
+      leveled = prize;
+      m.levelProfit = (buy!=null) ? leveled - buy - (a.levelQ20?gq:0) : null;
+    }
   }
   m.leveled=leveled; m.leveledField=leveledField;
   m.prize=prize; m.prizeField=prizeField;
@@ -456,7 +463,7 @@ function xpBadge(g, a){
 function renderTable(){
   const a=readAssume();
   $('metaControls').classList.toggle('hidden', CAT!=='meta');   // Empower-tier quality controls
-  $('qualControls').classList.toggle('hidden', CAT==='top' || CAT==='meta');  // 20q toggle on quality tabs
+  $('qualControls').classList.toggle('hidden', CAT==='meta');  // 20q toggle (quality tabs + Top picks)
   const wrap=document.querySelector('.tablewrap');
   if(CAT==='top'){
     $('dash').classList.remove('hidden'); wrap.classList.add('hidden');
