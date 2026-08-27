@@ -37,11 +37,12 @@ function readAssume(){
     failModel: $('failModel').value,
     metaQuality: +$('metaQuality').value || 20,        // Empower-tier leveling-quality bracket
     metaQualityCost: $('metaQualityCost').checked,     // charge 20 GCP for that quality
+    levelQ20: $('levelQ20').checked,                   // level to 20% quality (quality tabs)
   };
 }
 function saveSettings(){
   const s={}; ASSUME_IDS.forEach(id => s[id]=$(id).value);
-  ['league','unit','sort','minList','search','confFilter','autoRefresh','autoMin','metaQuality','metaQualityCost'].forEach(id=>{
+  ['league','unit','sort','minList','search','confFilter','autoRefresh','autoMin','metaQuality','metaQualityCost','levelQ20'].forEach(id=>{
     const el=$(id); if(!el) return; s[id] = el.type==='checkbox'?el.checked:el.value;
   });
   save(LS.settings, s);
@@ -196,16 +197,22 @@ function computeMetrics(g, a, mode){
     base = rawBase==null ? null : rawBase + qCost;
     m.levelProfit = (leveled!=null && buy!=null) ? leveled - buy - qCost : null;
   } else {
-    // 20%-quality flip. Show the leveled gem at 0q if it trades there, else 20q.
-    leveled = L0 ?? L20; leveledField = L0!=null ? 'L0':'L20';
+    // 20%-quality flip.
     prize   = P20 ?? P0; prizeField   = P20!=null ? 'P20':'P0';
     failRaw = F20 ?? F0;
     base = (a.evBase==='leveled')
       ? (L20 ?? (L0!=null ? L0+gq : null))    // buy a leveled 20q gem (or a 0q one + GCP)
       : (buy!=null ? buy+gq : null);          // buy L1 + GCP to 20q
-    // pure level flip if a 0q leveled price exists; otherwise the leveled value is 20q → subtract GCP
-    m.levelProfit = (leveled!=null && buy!=null)
-      ? (L0!=null ? leveled-buy : leveled-buy-gq) : null;
+    if(a.levelQ20 && L20!=null){
+      // "level to 20% quality": show the 20/20 leveled price and charge GCP in the profit
+      leveled = L20; leveledField = 'L20';
+      m.levelProfit = (buy!=null) ? L20 - buy - gq : null;
+    } else {
+      // pure level-only flip: 0q leveled if it trades, else the 20q price (then subtract GCP)
+      leveled = L0 ?? L20; leveledField = L0!=null ? 'L0':'L20';
+      m.levelProfit = (leveled!=null && buy!=null)
+        ? (L0!=null ? leveled-buy : leveled-buy-gq) : null;
+    }
   }
   m.leveled=leveled; m.leveledField=leveledField;
   m.prize=prize; m.prizeField=prizeField;
@@ -450,6 +457,7 @@ function xpBadge(g, a){
 function renderTable(){
   const a=readAssume();
   $('metaControls').classList.toggle('hidden', CAT!=='meta');   // Empower-tier quality controls
+  $('qualControls').classList.toggle('hidden', CAT==='top' || CAT==='meta');  // 20q toggle on quality tabs
   const wrap=document.querySelector('.tablewrap');
   if(CAT==='top'){
     $('dash').classList.remove('hidden'); wrap.classList.add('hidden');
@@ -919,7 +927,7 @@ function boot(){
     else if(HAS_API) loadFromServer(true);                  // local server: re-fetch the selected league
   });
   ASSUME_IDS.forEach(id=> $(id).addEventListener('input', ()=>{ saveSettings(); updateDblWarn(); if(GEMS.length) renderTable(); }));
-  ['unit','minList','search','confFilter','metaQuality','metaQualityCost'].forEach(id=>
+  ['unit','minList','search','confFilter','metaQuality','metaQualityCost','levelQ20'].forEach(id=>
     $(id).addEventListener('input', ()=>{ saveSettings(); if(GEMS.length) renderTable(); }));
   // search clear (×)
   $('search').addEventListener('input', syncSearchClear);
