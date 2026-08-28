@@ -63,8 +63,25 @@ const slim = (lines, keys) => ({ lines: lines.map(l => Object.fromEntries(keys.m
           scCount = rows.length;
         }
       } catch { /* scarabs optional */ }
+      // allflame embers: same bulk-exchange API (type=AllflameEmber), raw values only (no weighting).
+      let afCount = 0;
+      try {
+        const af = await getJson(`${exch}/overview?league=${encodeURIComponent(l.name)}&type=AllflameEmber`);
+        const meta = {}; (af.items || []).forEach(it => meta[it.id] = it);
+        const divineRate = (af.core && af.core.rates && af.core.rates.divine) || 0;
+        const rows = (af.lines || []).map(ln => {
+          const it = meta[ln.id] || {};
+          return { id: ln.id, name: it.name || ln.id,
+                   image: it.image ? IMG_HOST + it.image : null,
+                   chaos: ln.primaryValue || 0, volume: ln.volumePrimaryValue || 0 };
+        }).filter(r => r.chaos > 0);
+        if(rows.length){
+          fs.writeFileSync(path.join(outDir, `allflames-${l.url}.json`), JSON.stringify({ divineRate, rows }));
+          afCount = rows.length;
+        }
+      } catch { /* allflames optional */ }
       withData.push({ name:l.name, slug:l.url });
-      console.log(`  ${l.name}: ${gems.lines.length} gems${scCount ? `, ${scCount} scarabs` : ''}`);
+      console.log(`  ${l.name}: ${gems.lines.length} gems${scCount ? `, ${scCount} scarabs` : ''}${afCount ? `, ${afCount} allflames` : ''}`);
     } catch(e){ console.warn(`  ${l.name}: failed — ${e.message}`); }
   }
   if(!withData.length) throw new Error('no league data fetched');

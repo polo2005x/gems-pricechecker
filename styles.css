@@ -190,6 +190,15 @@ td.divider,th.divider{border-left:1px solid var(--line)}
 .sc-val.sc-dim{opacity:.6}
 .sc-vol{text-align:right; color:var(--muted); font-size:11px}
 .sc-wdot{display:inline-block; width:10px; height:10px; border-radius:50%; margin-right:2px; vertical-align:middle}
+/* Allflames group: raw values only (Total + Vol), so fewer columns than a scarab group */
+.af-ghead{display:grid; grid-template-columns:minmax(0,1fr) 74px 54px; gap:10px; align-items:center; padding:10px 14px; cursor:pointer; background:var(--panel2); border-bottom:1px solid var(--line)}
+.af-ghead:hover{background:var(--chip)}
+.af-colhdr,.af-row{display:grid; grid-template-columns:26px minmax(0,1fr) 74px 46px; gap:10px; padding:5px 14px}
+.af-colhdr{color:var(--muted); font-size:10px; text-transform:uppercase; letter-spacing:.03em; background:var(--panel)}
+.af-colhdr .r{text-align:right}
+.af-row{align-items:center; border-top:1px solid var(--line)}
+.af-row:hover{background:var(--panel2)}
+.af-row img{width:24px; height:24px; object-fit:contain}
 #scWeights label{gap:8px}
 
 /* scarab sub-tabs (Top picks / All groups) + grouped-controls wrapper */

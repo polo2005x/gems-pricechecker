@@ -19,6 +19,7 @@ const GAME = 'poe1';                  // this tool is PoE1-only
 let LEAGUE_SLUG = {};                 // league name -> poe.ninja slug (for per-league data files)
 let MODE = load('gpc_mode', 'gems');  // 'gems' | 'scarabs' — top-level view
 let SCARABS = null;                   // { divineRate, rows:[{id,name,image,chaos,volume}] } for current league
+let ALLFLAMES = null;                 // same shape — Necropolis allflame embers (raw values, no rarity/weighting)
 
 // ---------- tiny helpers ----------
 const $ = (id) => document.getElementById(id);
@@ -1016,7 +1017,9 @@ function renderScarabs(){
   const sub = SC.sub==='groups' ? 'groups' : 'top';
   document.querySelectorAll('[data-scsub]').forEach(b=> b.classList.toggle('active', b.dataset.scsub===sub));
   $('scGroupCtrls').classList.toggle('hidden', sub!=='groups');
-  if(!SCARABS || !SCARABS.rows || !SCARABS.rows.length){
+  const hasSc = SCARABS && SCARABS.rows && SCARABS.rows.length;
+  const hasAf = ALLFLAMES && ALLFLAMES.rows && ALLFLAMES.rows.length;
+  if(!hasSc && !hasAf){
     host.innerHTML = '<div class="sc-empty">No scarab data for this league yet. Try again shortly, or switch league.</div>';
     $('scCount').textContent = '';
     return;
@@ -1026,10 +1029,13 @@ function renderScarabs(){
 
 // ---------- Top picks (scarab dashboard) ----------
 function renderScarabTop(){
-  const groups = buildScarabGroups(SCARABS.rows);
+  const scRows = (SCARABS && SCARABS.rows) || [];
+  const afRows = (ALLFLAMES && ALLFLAMES.rows) || [];
+  const groups = buildScarabGroups(scRows);
   const byMech = {}; groups.forEach(g=> byMech[g.mechanic]=g);
-  const rows = SCARABS.rows.map(r=>({ ...r, mechanic:scMechanicOf(r.name), rarity:scRarityOf(r.name) }));
-  $('scCount').textContent = `${SCARABS.rows.length} scarabs · ${groups.length} mechanics`;
+  const rows = scRows.map(r=>({ ...r, mechanic:scMechanicOf(r.name), rarity:scRarityOf(r.name) }));
+  $('scCount').textContent = `${scRows.length} scarabs · ${groups.length} mechanics`
+    + (afRows.length ? ` · ${afRows.length} allflames` : '');
 
   // a group card entry: mechanic + its Wtd Avg (click jumps to the group)
   const gEnt = g => ({ jump:g.mechanic, label:g.mechanic, value:fmt(g.weighted), tag:`${g.count} scarab${g.count===1?'':'s'}` });
@@ -1040,12 +1046,18 @@ function renderScarabTop(){
       .sort((a,b)=> dir<0 ? b.weighted-a.weighted : a.weighted-b.weighted).map(gEnt);
   const topRows = (key, valHtml, n=10) => rows.slice().sort((a,b)=> b[key]-a[key]).slice(0,n).map(r=>sEnt(r, valHtml(r)));
 
+  // allflames: not Atlas-targetable, so no weighting/grouping — just the priciest embers, raw.
+  const afEnt = r => ({ jump:'Allflames', icon:r.image, label:r.name, value:fmt(r.chaos), tag:'' });
+  const bestAllflames = afRows.slice().sort((a,b)=> b.chaos-a.chaos).slice(0,10).map(afEnt);
+
   const cards = [
     { title:'Top value scarabs',        sub:'Most expensive single scarabs (raw price)',           entries: topRows('chaos', r=>fmt(r.chaos)) },
     { title:'Best groups to increase',  sub:'Highest Wtd Avg — worth investing Atlas points into',  entries: pickGroups(SC_SET_INCREASE, -1) },
     { title:'Best groups to block',     sub:'Lowest Wtd Avg — least worth your time',               entries: pickGroups(SC_SET_BLOCK, 1) },
     { title:'Best extra-content groups',sub:'Highest Wtd Avg of the map-layer mechanics',           entries: pickGroups(SC_SET_BLOCK, -1) },
   ];
+  if(bestAllflames.length) cards.push(
+    { title:'Best allflames', sub:'Most valuable allflame embers (raw price)', entries: bestAllflames });
 
   $('scarabs').innerHTML = '<div class="dash-grid">' + cards.map(c=>{
     const lis = c.entries.length ? c.entries.map(e=>
@@ -1058,26 +1070,65 @@ function renderScarabTop(){
 }
 
 // ---------- All groups (full grouped list) ----------
+// the Allflames group: raw values only (Total + Vol, no median/avg/rarity/weighting),
+// since allflame embers aren't Atlas-targetable so deeper stats add nothing.
+function allflameGroupHtml(){
+  const items = ((ALLFLAMES && ALLFLAMES.rows) || []).slice()
+    .sort((a,b)=> SC.sortDir<0 ? b.chaos-a.chaos : a.chaos-b.chaos);
+  const total = items.reduce((s,i)=>s+i.chaos,0);
+  const vol   = items.reduce((s,i)=>s+i.volume,0);
+  const open  = !SC.folds['Allflames'];
+  const rws = items.map(it=>`
+    <div class="af-row">
+      <span>${it.image?`<img src="${it.image}" alt="" loading="lazy">`:''}</span>
+      <span class="sc-name">${it.name}</span>
+      <span class="sc-val" title="Raw market price">${fmt(it.chaos)}</span>
+      <span class="sc-vol">${fmtVol(it.volume)}</span>
+    </div>`).join('');
+  return `
+    <div class="sc-group ${open?'open':''}">
+      <div class="af-ghead" data-scfold="Allflames">
+        <div class="sc-gname">${open?'▾':'▸'} Allflames <small>${items.length} ember${items.length===1?'':'s'} · not Atlas-targetable</small>
+          <span class="sc-hide" data-schide="Allflames" title="Hide this group">✕</span></div>
+        <div class="sc-metric" title="Total: sum of one of each allflame ember."><span class="lbl">Total</span><b>${fmt(total)}</b></div>
+        <div class="sc-metric" title="Volume: how many allflames traded recently on poe.ninja."><span class="lbl">Vol</span><b>${fmtVol(vol)}</b></div>
+      </div>
+      <div class="af-colhdr"><span></span><span>Allflame</span><span class="r" title="Raw market price">Raw</span><span class="r">Vol</span></div>
+      <div class="sc-rows">${rws}</div>
+    </div>`;
+}
+
 function renderScarabGroups(){
   const host = $('scarabs');
   const qstr = $('scSearch').value.trim().toLowerCase();
-  let groups = buildScarabGroups(SCARABS.rows);
+  const scRows = (SCARABS && SCARABS.rows) || [];
+  let groups = buildScarabGroups(scRows);
   if(qstr) groups = groups.filter(g=> g.mechanic.toLowerCase().includes(qstr) || g.items.some(i=>i.name.toLowerCase().includes(qstr)));
 
   const hidden  = groups.filter(g=> SC.hidden[g.mechanic]);
   const visible = groups.filter(g=> !SC.hidden[g.mechanic]);
-  $('scCount').textContent = `${SCARABS.rows.length} scarabs · ${visible.length}/${groups.length} mechanics`;
+
+  // allflames: one raw-value group, filtered by search & honouring its own hide toggle
+  const afAll   = (ALLFLAMES && ALLFLAMES.rows) || [];
+  const afMatch = afAll.length && (!qstr || 'allflames'.includes(qstr) || afAll.some(r=>r.name.toLowerCase().includes(qstr)));
+  const afHidden = !!SC.hidden['Allflames'];
+  const showAf   = afMatch && !afHidden;
+
+  $('scCount').textContent = `${scRows.length} scarabs · ${visible.length}/${groups.length} mechanics`
+    + (afAll.length ? ` · ${afAll.length} allflames` : '');
   // collapse/expand-all button reflects the current fold state of the visible groups
   const ca = $('scCollapseAll');
   if(ca){ const anyOpen = visible.some(g=> !SC.folds[g.mechanic]);
     ca.textContent = anyOpen ? '⊟ Collapse all' : '⊞ Expand all'; }
 
-  const hiddenBar = hidden.length
-    ? `<div class="sc-hiddenbar">Hidden (click to restore): ${hidden.map(g=>
-        `<button class="sc-chip" data-scunhide="${g.mechanic}" title="Unhide ${g.mechanic}">${g.mechanic} ✕</button>`).join('')}</div>`
-    : '';
+  const hiddenChips = hidden.map(g=>
+    `<button class="sc-chip" data-scunhide="${g.mechanic}" title="Unhide ${g.mechanic}">${g.mechanic} ✕</button>`);
+  if(afMatch && afHidden) hiddenChips.push(
+    `<button class="sc-chip" data-scunhide="Allflames" title="Unhide Allflames">Allflames ✕</button>`);
+  const hiddenBar = hiddenChips.length
+    ? `<div class="sc-hiddenbar">Hidden (click to restore): ${hiddenChips.join('')}</div>` : '';
 
-  if(!visible.length){ host.innerHTML = hiddenBar + '<div class="sc-empty">No mechanics match — clear the search or restore hidden groups.</div>'; return; }
+  if(!visible.length && !showAf){ host.innerHTML = hiddenBar + '<div class="sc-empty">Nothing matches — clear the search or restore hidden groups.</div>'; return; }
 
   host.innerHTML = hiddenBar + visible.map(g=>{
     const open = !SC.folds[g.mechanic];
@@ -1107,7 +1158,7 @@ function renderScarabGroups(){
           <span class="r">Vol</span></div>
         <div class="sc-rows">${rows}</div>
       </div>`;
-  }).join('');
+  }).join('') + (showAf ? allflameGroupHtml() : '');
 }
 
 function syncScSort(){
@@ -1163,12 +1214,18 @@ function buildScarabWeights(){
 }
 
 // scarab data for a league. Static host (Pages): per-slug file. Local serve.js: slugless file.
-async function loadScarabs(slug){
-  const urls = slug ? [`json/scarabs-${slug}.json`, 'json/scarabs.json'] : ['json/scarabs.json'];
+// load a per-league bulk-exchange file ({divineRate, rows}); tries the slugged file, then the
+// slugless one the local serve.js writes. Used for both scarabs and allflames.
+async function loadExchange(base, slug){
+  const urls = slug ? [`json/${base}-${slug}.json`, `json/${base}.json`] : [`json/${base}.json`];
   for(const u of urls){
-    try{ const r = await fetch(u, {cache:'no-store'}); if(r.ok){ SCARABS = await r.json(); return; } }catch{}
+    try{ const r = await fetch(u, {cache:'no-store'}); if(r.ok) return await r.json(); }catch{}
   }
-  SCARABS = null;
+  return null;
+}
+async function loadScarabs(slug){
+  SCARABS   = await loadExchange('scarabs', slug);
+  ALLFLAMES = await loadExchange('allflames', slug);
 }
 
 // ---------- top-level view (MODE) ----------

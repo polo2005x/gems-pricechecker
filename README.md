@@ -115,6 +115,11 @@ The per-rarity **drop weights** are editable in **⚙ Settings → Scarab rarity
 calibrated from a 3.27 drop sample); lowering a rarity's weight makes it count for less in every group's
 **Wtd Avg**, and the view re-scores instantly. Sort, folds, hidden groups, and weights are all saved in your browser.
 
+**Allflames** (Necropolis allflame embers) get their own group at the bottom of **All groups**, plus a
+**Best allflames** card in the scarab Top picks. Because they aren't Atlas-targetable, there's no rarity
+weighting or Wtd Avg for them — the group shows just **raw price + volume** per ember and a **Total + Vol**
+header. They're kept out of the gem Top picks entirely.
+
 ### Corruption odds (why EV can be negative)
 
 A single Vaal Orb has a **~12.5%** chance to add +1 level (25% chance it changes level,

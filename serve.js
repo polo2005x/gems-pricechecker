@@ -22,13 +22,27 @@ function apiUrls(game, league){
     gems: `${b}/item/overview?league=${L}&type=SkillGem`,
     curr: `${b}/currency/overview?league=${L}&type=Currency`,
     scar: `https://poe.ninja/${game}/api/economy/exchange/current/overview?league=${L}&type=Scarab`,
+    afl:  `https://poe.ninja/${game}/api/economy/exchange/current/overview?league=${L}&type=AllflameEmber`,
   };
 }
 const IMG_HOST = 'https://web.poecdn.com';   // scarab icons are on the CDN
 
+// slim a bulk-exchange overview to { divineRate, rows:[{id,name,image,chaos,volume}] } (scarabs & allflames)
+function slimExchange(sj){
+  const meta = {}; (sj.items || []).forEach(it => meta[it.id] = it);
+  const divineRate = (sj.core && sj.core.rates && sj.core.rates.divine) || 0;
+  const rows = (sj.lines || []).map(ln => {
+    const it = meta[ln.id] || {};
+    return { id: ln.id, name: it.name || ln.id,
+             image: it.image ? IMG_HOST + it.image : null,
+             chaos: ln.primaryValue || 0, volume: ln.volumePrimaryValue || 0 };
+  }).filter(r => r.chaos > 0);
+  return { divineRate, rows };
+}
+
 // download both overviews and write them to ./json/
 async function refresh(game, league){
-  const { gems, curr, scar } = apiUrls(game, league);
+  const { gems, curr, scar, afl } = apiUrls(game, league);
   const gr = await fetch(gems);
   if(!gr.ok) throw new Error(`poe.ninja gems HTTP ${gr.status} (check league name "${league}" / game "${game}")`);
   const gText = await gr.text();
@@ -38,7 +52,7 @@ async function refresh(game, league){
   try { const j = JSON.parse(gText); gCount = Array.isArray(j.lines) ? j.lines.length : -1; } catch {}
   if(gCount <= 0) throw new Error(`no gems returned for league "${league}" (${game}) — check the spelling/game`);
 
-  let cText = null, scText = null;
+  let cText = null, scText = null, afText = null;
   try {
     const cr = await fetch(curr);
     if(cr.ok){ const t = await cr.text(); const cj = JSON.parse(t); if(Array.isArray(cj.lines) && cj.lines.length) cText = t; }
@@ -49,23 +63,26 @@ async function refresh(game, league){
   try {
     const sr = await fetch(scar);
     if(sr.ok){
-      const sj = JSON.parse(await sr.text());
-      const meta = {}; (sj.items || []).forEach(it => meta[it.id] = it);
-      const divineRate = (sj.core && sj.core.rates && sj.core.rates.divine) || 0;
-      const rows = (sj.lines || []).map(ln => {
-        const it = meta[ln.id] || {};
-        return { id: ln.id, name: it.name || ln.id,
-                 image: it.image ? IMG_HOST + it.image : null,
-                 chaos: ln.primaryValue || 0, volume: ln.volumePrimaryValue || 0 };
-      }).filter(r => r.chaos > 0);
+      const { divineRate, rows } = slimExchange(JSON.parse(await sr.text()));
       if(rows.length){ scText = JSON.stringify({ divineRate, rows }); scCount = rows.length; }
     }
   } catch { /* scarabs optional */ }
+
+  // allflame embers (same bulk-exchange API, type=AllflameEmber) → raw values, no weighting
+  let afCount = 0;
+  try {
+    const ar = await fetch(afl);
+    if(ar.ok){
+      const { divineRate, rows } = slimExchange(JSON.parse(await ar.text()));
+      if(rows.length){ afText = JSON.stringify({ divineRate, rows }); afCount = rows.length; }
+    }
+  } catch { /* allflames optional */ }
 
   fs.mkdirSync(path.join(ROOT, 'json'), { recursive:true });
   fs.writeFileSync(path.join(ROOT, 'json', 'gems.json'), gText);
   if(cText) fs.writeFileSync(path.join(ROOT, 'json', 'currency.json'), cText);
   if(scText) fs.writeFileSync(path.join(ROOT, 'json', 'scarabs.json'), scText);
+  if(afText) fs.writeFileSync(path.join(ROOT, 'json', 'allflames.json'), afText);
   fs.writeFileSync(path.join(ROOT, 'json', 'meta.json'), JSON.stringify({ league, game, when: Date.now() }));
   await writeLeagues(game);
   try {
@@ -76,8 +93,9 @@ async function refresh(game, league){
     if(Object.keys(map).length) fs.writeFileSync(path.join(ROOT, 'json', 'trademap.json'), JSON.stringify(map));
   } catch { /* trademap optional */ }
   console.log(`  ↻ downloaded ${league} (${game}) — ${(gText.length/1e6).toFixed(1)} MB gems` +
-              (cText ? ' + currency' : '') + (scCount ? ` + ${scCount} scarabs` : '') + ` @ ${new Date().toLocaleTimeString()}`);
-  return { ok:true, when:Date.now(), gemsBytes:gText.length, hasCurrency:!!cText, scarabs:scCount, league, game };
+              (cText ? ' + currency' : '') + (scCount ? ` + ${scCount} scarabs` : '') +
+              (afCount ? ` + ${afCount} allflames` : '') + ` @ ${new Date().toLocaleTimeString()}`);
+  return { ok:true, when:Date.now(), gemsBytes:gText.length, hasCurrency:!!cText, scarabs:scCount, allflames:afCount, league, game };
 }
 
 // write leagues.json (name+slug) so the dropdown is populated & ordered (challenge league first)
