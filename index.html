@@ -218,18 +218,25 @@
 
 <!-- ============ CONTROLS (Scarabs mode) ============ -->
 <section id="scarabControls" class="controls hidden">
-  <span class="search-wrap">
-    <input id="scSearch" type="search" placeholder="Search scarab / mechanic…" />
-    <button id="scSearchClear" type="button" class="search-clear hidden" aria-label="Clear search" title="Clear">&times;</button>
+  <span class="sc-subtabs">
+    <button class="sc-subtab" data-scsub="top">&#9733; Top picks</button>
+    <button class="sc-subtab" data-scsub="groups">All groups</button>
   </span>
-  <span class="sc-sortbar">
-    <span class="sc-sortlbl">Sort</span>
-    <button class="sc-sort" data-scsort="total"></button>
-    <button class="sc-sort" data-scsort="median"></button>
-    <button class="sc-sort" data-scsort="average"></button>
-    <button class="sc-sort" data-scsort="weighted"></button>
+  <span id="scGroupCtrls">
+    <span class="search-wrap">
+      <input id="scSearch" type="search" placeholder="Search scarab / mechanic…" />
+      <button id="scSearchClear" type="button" class="search-clear hidden" aria-label="Clear search" title="Clear">&times;</button>
+    </span>
+    <span class="sc-sortbar">
+      <span class="sc-sortlbl">Sort</span>
+      <button class="sc-sort" data-scsort="total"></button>
+      <button class="sc-sort" data-scsort="median"></button>
+      <button class="sc-sort" data-scsort="average"></button>
+      <button class="sc-sort" data-scsort="weighted"></button>
+    </span>
+    <button id="scCollapseAll" title="Collapse or expand every visible group"></button>
+    <button id="scReset" title="Reset scarab sorting, folded &amp; hidden groups to defaults">&#8635; Reset</button>
   </span>
-  <button id="scReset" title="Reset scarab sorting, folded &amp; hidden groups to defaults">&#8635; Reset</button>
   <span class="spacer"></span>
   <button id="settingsBtn2" title="Assumptions, rarity weights &amp; more">&#9881; Settings</button>
   <span id="scCount" class="muted"></span>

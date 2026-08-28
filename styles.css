@@ -191,3 +191,12 @@ td.divider,th.divider{border-left:1px solid var(--line)}
 .sc-vol{text-align:right; color:var(--muted); font-size:11px}
 .sc-wdot{display:inline-block; width:10px; height:10px; border-radius:50%; margin-right:2px; vertical-align:middle}
 #scWeights label{gap:8px}
+
+/* scarab sub-tabs (Top picks / All groups) + grouped-controls wrapper */
+.sc-subtabs{display:inline-flex; border:1px solid var(--line); border-radius:8px; overflow:hidden}
+.sc-subtab{background:var(--panel2); color:var(--muted); border:none; border-right:1px solid var(--line); border-radius:0; padding:6px 14px; font-weight:600}
+.sc-subtab:last-child{border-right:none}
+.sc-subtab:hover{color:var(--text)}
+.sc-subtab.active{background:var(--accent); color:#1a1a1a}
+#scGroupCtrls{display:inline-flex; flex-wrap:wrap; align-items:center; gap:10px}
+#scGroupCtrls.hidden{display:none}

@@ -952,10 +952,15 @@ const SC_METRIC_DESC = {
   volume:'Volume: how much of these scarabs traded recently on poe.ninja.',
 };
 
-// scarab view state (sort / folds / hidden / weights), persisted under one key
-let SC = Object.assign({ sortKey:'total', sortDir:-1, folds:{}, hidden:{}, weights:{} }, load('gpc_scarab', {}) || {});
+// scarab view state (sub-view / sort / folds / hidden / weights), persisted under one key
+let SC = Object.assign({ sub:'top', sortKey:'total', sortDir:-1, folds:{}, hidden:{}, weights:{} }, load('gpc_scarab', {}) || {});
 SC.weights = Object.assign({}, SC_WEIGHT_DEF, SC.weights || {});
 function saveSC(){ save('gpc_scarab', SC); }
+
+// Mechanic sets for the Top-picks dashboard (already normalized to real group names:
+// trarthus→Trarthan, kalguur→Kalguuran, delve→Sulphite; heist has no scarabs so it's absent).
+const SC_SET_BLOCK    = ['Breach','Legion','Expedition','Harvest','Abyss','Trarthan','Delirium','Kalguuran','Sulphite','Ritual','Blight','Ultimatum'];
+const SC_SET_INCREASE = ['Ambush','Anarchy','Domination','Torment','Beyond','Essence','Titanic','Cartography','Divination'];
 
 function scMechanicOf(name){
   if(/^Scarab of /i.test(name)) return 'Generic';
@@ -1005,13 +1010,56 @@ function scRarBadge(r){
          `style="background:${c}22;color:${c};border:1px solid ${c}66">${r}</span>`;
 }
 
+// dispatcher: sub-view (top-picks dashboard vs full grouped list) + control visibility
 function renderScarabs(){
   const host = $('scarabs'); if(!host) return;
+  const sub = SC.sub==='groups' ? 'groups' : 'top';
+  document.querySelectorAll('[data-scsub]').forEach(b=> b.classList.toggle('active', b.dataset.scsub===sub));
+  $('scGroupCtrls').classList.toggle('hidden', sub!=='groups');
   if(!SCARABS || !SCARABS.rows || !SCARABS.rows.length){
     host.innerHTML = '<div class="sc-empty">No scarab data for this league yet. Try again shortly, or switch league.</div>';
     $('scCount').textContent = '';
     return;
   }
+  if(sub==='top') renderScarabTop(); else renderScarabGroups();
+}
+
+// ---------- Top picks (scarab dashboard) ----------
+function renderScarabTop(){
+  const groups = buildScarabGroups(SCARABS.rows);
+  const byMech = {}; groups.forEach(g=> byMech[g.mechanic]=g);
+  const rows = SCARABS.rows.map(r=>({ ...r, mechanic:scMechanicOf(r.name), rarity:scRarityOf(r.name) }));
+  $('scCount').textContent = `${SCARABS.rows.length} scarabs · ${groups.length} mechanics`;
+
+  // a group card entry: mechanic + its Wtd Avg (click jumps to the group)
+  const gEnt = g => ({ jump:g.mechanic, label:g.mechanic, value:fmt(g.weighted), tag:`${g.count} scarab${g.count===1?'':'s'}` });
+  // a scarab card entry: icon + name + a value (price or volume), tagged with its mechanic
+  const sEnt = (r, valHtml) => ({ jump:r.mechanic, icon:r.image, label:r.name, value:valHtml, tag:r.mechanic });
+
+  const pickGroups = (set, dir) => set.map(m=>byMech[m]).filter(Boolean)
+      .sort((a,b)=> dir<0 ? b.weighted-a.weighted : a.weighted-b.weighted).map(gEnt);
+  const topRows = (key, valHtml, n=10) => rows.slice().sort((a,b)=> b[key]-a[key]).slice(0,n).map(r=>sEnt(r, valHtml(r)));
+
+  const cards = [
+    { title:'Top value scarabs',        sub:'Most expensive single scarabs (raw price)',           entries: topRows('chaos', r=>fmt(r.chaos)) },
+    { title:'Best groups to increase',  sub:'Highest Wtd Avg — worth investing Atlas points into',  entries: pickGroups(SC_SET_INCREASE, -1) },
+    { title:'Best groups to block',     sub:'Lowest Wtd Avg — least worth your time',               entries: pickGroups(SC_SET_BLOCK, 1) },
+    { title:'Best extra-content groups',sub:'Highest Wtd Avg of the map-layer mechanics',           entries: pickGroups(SC_SET_BLOCK, -1) },
+  ];
+
+  $('scarabs').innerHTML = '<div class="dash-grid">' + cards.map(c=>{
+    const lis = c.entries.length ? c.entries.map(e=>
+      `<li data-scjump="${e.jump.replace(/"/g,'&quot;')}" title="Open ${e.jump} in All groups">`+
+        `<span class="dn">${e.icon?`<img src="${e.icon}" loading="lazy" alt="">`:''}${e.label}</span>`+
+        `<span class="dv">${e.value}<span class="dtag">${e.tag||''}</span></span></li>`).join('')
+      : '<li class="dim">no data</li>';
+    return `<div class="dash-card"><h3>${c.title}</h3><div class="dash-sub">${c.sub}</div><ol>${lis}</ol></div>`;
+  }).join('') + '</div>';
+}
+
+// ---------- All groups (full grouped list) ----------
+function renderScarabGroups(){
+  const host = $('scarabs');
   const qstr = $('scSearch').value.trim().toLowerCase();
   let groups = buildScarabGroups(SCARABS.rows);
   if(qstr) groups = groups.filter(g=> g.mechanic.toLowerCase().includes(qstr) || g.items.some(i=>i.name.toLowerCase().includes(qstr)));
@@ -1019,6 +1067,10 @@ function renderScarabs(){
   const hidden  = groups.filter(g=> SC.hidden[g.mechanic]);
   const visible = groups.filter(g=> !SC.hidden[g.mechanic]);
   $('scCount').textContent = `${SCARABS.rows.length} scarabs · ${visible.length}/${groups.length} mechanics`;
+  // collapse/expand-all button reflects the current fold state of the visible groups
+  const ca = $('scCollapseAll');
+  if(ca){ const anyOpen = visible.some(g=> !SC.folds[g.mechanic]);
+    ca.textContent = anyOpen ? '⊟ Collapse all' : '⊞ Expand all'; }
 
   const hiddenBar = hidden.length
     ? `<div class="sc-hiddenbar">Hidden (click to restore): ${hidden.map(g=>
@@ -1073,12 +1125,28 @@ function onScSortClick(e){
   saveSC(); syncScSort(); renderScarabs();
 }
 function onScGroupClick(e){
+  const jump   = e.target.closest('[data-scjump]');
   const hide   = e.target.closest('[data-schide]');
   const unhide = e.target.closest('[data-scunhide]');
   const fold   = e.target.closest('[data-scfold]');
+  if(jump){   // from a Top-picks entry: open that mechanic in All groups and scroll to it
+    const m = jump.dataset.scjump;
+    SC.sub='groups'; delete SC.hidden[m]; SC.folds[m]=false; saveSC(); renderScarabs();
+    const el = [...document.querySelectorAll('#scarabs [data-scfold]')].find(x=> x.dataset.scfold===m);
+    if(el) el.scrollIntoView({behavior:'smooth', block:'center'});
+    return;
+  }
   if(hide){   e.stopPropagation(); SC.hidden[hide.dataset.schide] = true; saveSC(); renderScarabs(); return; }
   if(unhide){ delete SC.hidden[unhide.dataset.scunhide]; saveSC(); renderScarabs(); return; }
   if(fold){   const m = fold.dataset.scfold; SC.folds[m] = !SC.folds[m]; saveSC(); renderScarabs(); return; }
+}
+// collapse or expand every visible (non-hidden) group in one click
+function onScCollapseAll(){
+  if(!SCARABS) return;
+  const visible = buildScarabGroups(SCARABS.rows).filter(g=> !SC.hidden[g.mechanic]);
+  const anyOpen = visible.some(g=> !SC.folds[g.mechanic]);
+  visible.forEach(g=>{ if(anyOpen) SC.folds[g.mechanic]=true; else delete SC.folds[g.mechanic]; });
+  saveSC(); renderScarabs();
 }
 function scResetView(){ SC.sortKey='total'; SC.sortDir=-1; SC.folds={}; SC.hidden={}; saveSC(); syncScSort(); renderScarabs(); }
 
@@ -1167,7 +1235,9 @@ function boot(){
   // scarab controls: sort, reset, fold/hide, search, weights
   buildScarabWeights();
   document.querySelectorAll('[data-scsort]').forEach(b=> b.onclick=onScSortClick);
+  document.querySelectorAll('[data-scsub]').forEach(b=> b.onclick=()=>{ SC.sub=b.dataset.scsub; saveSC(); renderScarabs(); });
   $('scReset').onclick = scResetView;
+  $('scCollapseAll').onclick = onScCollapseAll;
   $('scarabs').addEventListener('click', onScGroupClick);
   $('scSearch').addEventListener('input', ()=>{
     $('scSearchClear').classList.toggle('hidden', !$('scSearch').value);
