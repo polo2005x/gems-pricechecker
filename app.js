@@ -595,20 +595,29 @@ function renderDashboard(a){
   const cf=$('confFilter').value;   // honour the confidence filter so top picks aren't faked by thin prices
   if(cf!=='any') rows=rows.filter(x=>{ const c=x.m.confCount; return c!=null && (cf==='high'?c>10:c>3); });
   const lists = [
-    {title:'Best to level — profit',            sub:'Level profit',                       val:x=>x.m.levelProfit},
-    {title:'Best to level — profit ÷ time',     sub:'Level profit per unit leveling time',val:x=>x.m.adjProfit},
-    {title:'Best single Vaal corrupt',          sub:'Vaal EV / attempt',                  val:x=>x.m.evVaal},
-    {title:'Best single Vaal ÷ time',           sub:'Vaal EV per unit leveling time',     val:x=>x.m.adjVaal},
-    {title:'Best double corrupt',               sub:'Double EV / attempt',                val:x=>x.m.evDbl},
-    {title:'Best double corrupt ÷ time',        sub:'Double EV per unit leveling time',   val:x=>x.m.adjDbl},
-    {title:'Biggest +1 prize',                  sub:'Corrupted +1 level / 20q value',     val:x=>x.m.prize, plain:true},
-    {title:'Biggest +1/23 prize',               sub:'Double-corrupt +1 level / 23q value',val:x=>x.m.p23, plain:true},
-    {title:'Biggest Vaal +1 prize',             sub:'Vaal-counterpart +1 level / 20q value', val:x=>x.m.vaalPrize, plain:true},
+    {title:'Best to level — profit',            sub:'Level profit',                       val:x=>x.m.levelProfit,
+      info:'Ranked by Level profit — the chaos you clear buying a level-1 gem, leveling it to max yourself, and reselling (minus GCP if the sale price is a 20q one). Highest first.'},
+    {title:'Best to level — profit ÷ time',     sub:'Level profit per unit leveling time',val:x=>x.m.adjProfit,
+      info:'Ranked by Level profit ÷ the gem’s leveling grind (its XP-to-max vs a normal L20 gem). Rewards fast-leveling gems, so a slow 7× gem isn’t flattered by a big raw profit. Best profit per unit of leveling time.'},
+    {title:'Best single Vaal corrupt',          sub:'Vaal EV / attempt',                  val:x=>x.m.evVaal,
+      info:'Ranked by Vaal EV — average profit per single Vaal Orb: the +1 Prize weighted by hit chance, plus resold failures, minus cost. Highest expected value first (can be negative on pricey gems).'},
+    {title:'Best single Vaal ÷ time',           sub:'Vaal EV per unit leveling time',     val:x=>x.m.adjVaal,
+      info:'Vaal EV ÷ the gem’s leveling grind — best single-corrupt expected value per unit of leveling time (assumes you self-level, EV base = Buy-in).'},
+    {title:'Best double corrupt',               sub:'Double EV / attempt',                val:x=>x.m.evDbl,
+      info:'Ranked by Double EV — average profit per Temple double-corruption (higher +1 odds, plus its own cost). Highest expected value first.'},
+    {title:'Best double corrupt ÷ time',        sub:'Double EV per unit leveling time',   val:x=>x.m.adjDbl,
+      info:'Double EV ÷ the gem’s leveling grind — best double-corrupt expected value per unit of leveling time.'},
+    {title:'Biggest +1 prize',                  sub:'Corrupted +1 level / 20q value',     val:x=>x.m.prize, plain:true,
+      info:'Ranked by the raw sale price of the corrupted +1-level gem (21/20, or +1 level / 0q on the meta tab) — the jackpot you’re gambling for, ignoring the odds and cost of hitting it.'},
+    {title:'Biggest +1/23 prize',               sub:'Double-corrupt +1 level / 23q value',val:x=>x.m.p23, plain:true,
+      info:'Ranked by the double-corrupt ceiling: +1 level AND 23% quality, corrupted — the best roll a double corrupt can produce. Raw price only (ignores odds/cost).'},
+    {title:'Biggest Vaal +1 prize',             sub:'Vaal-counterpart +1 level / 20q value', val:x=>x.m.vaalPrize, plain:true,
+      info:'Ranked by the price of the gem’s VAAL counterpart at +1 level / 20q (e.g. Vaal Blade Vortex, not Blade Vortex) — a possible corruption outcome, usually reached via a double corrupt. Blank if the gem has no Vaal version.'},
   ];
   let html='<div class="dash-grid">';
   for(const L of lists){
     const top = rows.filter(x=>L.val(x)!=null).sort((p,q)=>L.val(q)-L.val(p)).slice(0,10);
-    html += `<div class="dash-card"><h3>${L.title}</h3><div class="dash-sub">${L.sub}</div><ol>`;
+    html += `<div class="dash-card"><h3>${L.title}${L.info?infoIcon(L.info):''}</h3><div class="dash-sub">${L.sub}</div><ol>`;
     for(const x of top){
       const v = L.plain ? fmt(L.val(x)) : fmtSigned(L.val(x));
       html += `<li data-cat="${x.g.cat}" data-name="${x.g.name.replace(/"/g,'&quot;')}" title="open in ${CAT_TAG[x.g.cat]} tab">`+
@@ -1051,13 +1060,18 @@ function renderScarabTop(){
   const bestAllflames = afRows.slice().sort((a,b)=> b.chaos-a.chaos).slice(0,10).map(afEnt);
 
   const cards = [
-    { title:'Top value scarabs',        sub:'Most expensive single scarabs (raw price)',           entries: topRows('chaos', r=>fmt(r.chaos)) },
-    { title:'Best groups to increase',  sub:'Highest Wtd Avg — worth investing Atlas points into',  entries: pickGroups(SC_SET_INCREASE, -1) },
-    { title:'Best groups to block',     sub:'Lowest Wtd Avg — least worth your time',               entries: pickGroups(SC_SET_BLOCK, 1) },
-    { title:'Best extra-content groups',sub:'Highest Wtd Avg of the map-layer mechanics',           entries: pickGroups(SC_SET_BLOCK, -1) },
+    { title:'Top value scarabs',        sub:'Most expensive single scarabs (raw price)',           entries: topRows('chaos', r=>fmt(r.chaos)),
+      info:'Ranked by raw market price — the most expensive individual scarabs right now, across every mechanic, before any rarity weighting. The tag shows each one’s mechanic.' },
+    { title:'Best groups to increase',  sub:'Highest Wtd Avg — worth investing Atlas points into',  entries: pickGroups(SC_SET_INCREASE, -1),
+      info:'The “more monsters / more packs” mechanic groups, ranked by Wtd Avg (rarity-weighted expected value of a random scarab drop) — highest first. These are the ones most worth speccing Atlas points into. Click a group to open it.' },
+    { title:'Best groups to block',     sub:'Lowest Wtd Avg — least worth your time',               entries: pickGroups(SC_SET_BLOCK, 1),
+      info:'The map-layer mechanic groups, ranked by Wtd Avg lowest first — the least rewarding per drop, so the best candidates to block or skip on your Atlas.' },
+    { title:'Best extra-content groups',sub:'Highest Wtd Avg of the map-layer mechanics',           entries: pickGroups(SC_SET_BLOCK, -1),
+      info:'The same map-layer mechanic groups as “block”, but ranked Wtd Avg highest first — the most rewarding extra-content mechanics to run when you do include them.' },
   ];
   if(bestAllflames.length) cards.push(
-    { title:'Best allflames', sub:'Most valuable allflame embers (raw price)', entries: bestAllflames });
+    { title:'Best allflames', sub:'Most valuable allflame embers (raw price)', entries: bestAllflames,
+      info:'Allflame embers ranked by raw market price. They aren’t Atlas-targetable, so there’s no rarity weighting — this is just the priciest embers, highest first.' });
 
   $('scarabs').innerHTML = '<div class="dash-grid">' + cards.map(c=>{
     const lis = c.entries.length ? c.entries.map(e=>
@@ -1065,7 +1079,7 @@ function renderScarabTop(){
         `<span class="dn">${e.icon?`<img src="${e.icon}" loading="lazy" alt="">`:''}${e.label}</span>`+
         `<span class="dv">${e.value}<span class="dtag">${e.tag||''}</span></span></li>`).join('')
       : '<li class="dim">no data</li>';
-    return `<div class="dash-card"><h3>${c.title}</h3><div class="dash-sub">${c.sub}</div><ol>${lis}</ol></div>`;
+    return `<div class="dash-card"><h3>${c.title}${c.info?infoIcon(c.info):''}</h3><div class="dash-sub">${c.sub}</div><ol>${lis}</ol></div>`;
   }).join('') + '</div>';
 }
 
