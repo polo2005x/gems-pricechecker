@@ -468,7 +468,7 @@ function xpBadge(g, a){
 function renderTable(){
   if(MODE==='scarabs') return;   // scarab view owns the page; render() handles the switch
   const a=readAssume();
-  $('metaControls').classList.toggle('hidden', CAT!=='meta');   // Empower-tier quality controls
+  $('metaControls').classList.toggle('hidden', CAT!=='meta' && CAT!=='top');   // Empower-tier quality controls (also on Top picks — drives meta gems' ÷time ranking)
   $('qualControls').classList.toggle('hidden', CAT==='meta');  // 20q toggle (quality tabs + Top picks)
   const wrap=document.querySelector('.tablewrap');
   if(CAT==='top'){
